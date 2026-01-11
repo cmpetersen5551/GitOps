@@ -26,3 +26,6 @@ flux get kustomizations -n flux-system
 Next steps
 - Read `HARDWARE.md` to understand the cluster topology and storage layout.
 - Read `OPERATIONS.md` for operational tasks, common commands, and troubleshooting.
+
+Adding services
+- New services (e.g., Sonarr) live in their own folders under `clusters/homelab/` and are included via the `flux-system` kustomization. See `sonarr/` for an example deployment and storage configuration.

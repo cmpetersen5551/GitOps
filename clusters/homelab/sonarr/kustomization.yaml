@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - storageclass-local.yaml
+  - pv-sonarr-w1.yaml
+  - pv-sonarr-w2.yaml
+  - pvc-sonarr.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml

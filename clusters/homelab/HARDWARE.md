@@ -17,6 +17,9 @@ Storage layout
   - `/data/pods` — application pod persistent data.
     - This folder is NOT provided by NFS. Each worker has a local `/data/pods` that is synchronized between workers using Syncthing (external process).
 
+  Sonarr storage
+  - Sonarr stores runtime and configuration under `/data/pods/sonarr` on worker nodes. A `local` PersistentVolume is used to bind this path into Kubernetes pods. Primary scheduling is targeted to `k3s-w1` with `k3s-w2` available as a failover.
+
 Topology (ASCII)
 - Unraid (NFS server)
   ├─ Proxmox host (bind-mount of NFS)

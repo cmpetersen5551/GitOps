@@ -13,6 +13,9 @@ Storage & sync
   - `/data/pods` is local on each worker and is NOT on the NFS export.
   - `/data/pods` is synchronized across workers via Syncthing (external process). Ensure Syncthing is healthy before relying on pod-local data.
 
+ Application storage notes
+ - For services managed by Flux (e.g., Sonarr), we prefer Kubernetes `local` PersistentVolumes bound to paths under `/data/pods` and a `local-storage` StorageClass with `WaitForFirstConsumer` to ensure correct node binding. This keeps pod data under `/data/pods/<service>` and allows node affinity for primary/failover nodes.
+
 GPU workload strategy
 - `k3s-w1`: primary GPU node (preferred scheduling).
 - `k3s-w2`: failover GPU node; manual or automated failover strategies may be used.
