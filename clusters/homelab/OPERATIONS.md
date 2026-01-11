@@ -15,6 +15,7 @@ Storage & sync
 
 Application storage notes
 - For services managed by Flux (e.g., Sonarr), prefer using the cluster's Rancher Local Path provisioner (`StorageClass: local-path`) which dynamically provisions directories under the node-local storage path and supports `WaitForFirstConsumer`. This avoids managing static `local` PVs while ensuring correct node binding for pod-local data under `/data/pods/<service>`.
+- For services managed by Flux (e.g., Sonarr), prefer using the cluster's Rancher Local Path provisioner (`StorageClass: local-path`) which dynamically provisions directories under the node-local storage path and supports `WaitForFirstConsumer`. The cluster default has been configured to create paths under `/data/pods` so new PVCs using `local-path` will be provisioned at `/data/pods/<volume>` on the node where the Pod is scheduled. This avoids managing static `local` PVs while ensuring correct node binding for pod-local data.
 
 GPU workload strategy
 - `k3s-w1`: primary GPU node (preferred scheduling).

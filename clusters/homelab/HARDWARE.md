@@ -19,6 +19,7 @@ Storage layout
 
   Sonarr storage
   - Sonarr stores runtime and configuration under `/data/pods/sonarr` on worker nodes. The cluster uses the Rancher Local Path provisioner (`local-path` StorageClass) to dynamically create node-local directories for PVCs. Primary scheduling is targeted to `k3s-w1` with `k3s-w2` available as a failover.
+   - Sonarr stores runtime and configuration under `/data/pods/sonarr` on worker nodes. The cluster uses the Rancher Local Path provisioner (`local-path` StorageClass) to dynamically create node-local directories for PVCs. The provisioner is configured to provision paths under `/data/pods`, so new PVCs using `local-path` will create directories under `/data/pods/<volume>`. Primary scheduling is targeted to `k3s-w1` with `k3s-w2` available as a failover.
 
 Topology (ASCII)
 - Unraid (NFS server)
