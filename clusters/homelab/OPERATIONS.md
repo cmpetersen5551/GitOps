@@ -13,6 +13,10 @@ Storage & sync
   - `/data/pods` is local on each worker and is NOT on the NFS export.
   - `/data/pods` is synchronized across workers via Syncthing (external process). Ensure Syncthing is healthy before relying on pod-local data.
 
+Application storage notes
+- For services managed by Flux (e.g., Sonarr), prefer using the cluster's Rancher Local Path provisioner (`StorageClass: local-path`) which dynamically provisions directories under the node-local storage path and supports `WaitForFirstConsumer`. This avoids managing static `local` PVs while ensuring correct node binding for pod-local data under `/data/pods/<service>`.
+- For services managed by Flux (e.g., Sonarr), prefer using the cluster's Rancher Local Path provisioner (`StorageClass: local-path`) which dynamically provisions directories under the node-local storage path and supports `WaitForFirstConsumer`. The cluster default has been configured to create paths under `/data/pods` so new PVCs using `local-path` will be provisioned at `/data/pods/<volume>` on the node where the Pod is scheduled. This avoids managing static `local` PVs while ensuring correct node binding for pod-local data.
+
 GPU workload strategy
 - `k3s-w1`: primary GPU node (preferred scheduling).
 - `k3s-w2`: failover GPU node; manual or automated failover strategies may be used.
