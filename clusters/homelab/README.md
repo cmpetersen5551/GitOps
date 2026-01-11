@@ -22,3 +22,7 @@ kubectl get nodes -o wide
 flux get sources git -n flux-system
 flux get kustomizations -n flux-system
 ```
+
+Next steps
+- Read `HARDWARE.md` to understand the cluster topology and storage layout.
+- Read `OPERATIONS.md` for operational tasks, common commands, and troubleshooting.

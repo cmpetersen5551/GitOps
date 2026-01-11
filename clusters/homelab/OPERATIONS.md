@@ -68,6 +68,8 @@ Troubleshooting quick hits
 
 Flux / Kustomize references (for future edits)
 - Flux docs: https://fluxcd.io/docs/
+- Bootstrap: https://fluxcd.io/docs/guides/flux-bootstrap/
+- GitRepository: https://fluxcd.io/docs/components/source/gitrepository/
 - Kustomization: https://fluxcd.io/docs/components/kustomize/kustomization/
 - Flux CLI: https://fluxcd.io/docs/cmd/
 
