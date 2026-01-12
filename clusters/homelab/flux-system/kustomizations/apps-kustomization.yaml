@@ -5,12 +5,13 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  path: ../apps
+  path: ../../apps
   prune: true
   wait: true
   timeout: 3m
   dependsOn:
     - name: cluster-addons-controllers
+    - name: operations
   sourceRef:
     kind: GitRepository
     name: flux-system

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-monitor
+  namespace: operations
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: volsync-monitor
+  template:
+    metadata:
+      labels:
+        app: volsync-monitor
+    spec:
+      serviceAccountName: volsync-monitor
+      containers:
+        - name: monitor
+          image: bitnami/kubectl:1.27
+          command:
+            - /bin/sh
+            - -c
+            - |
+              chmod +x /etc/volsync-failover/monitor.sh /etc/volsync-failover/failover.sh || true
+              /etc/volsync-failover/monitor.sh
+          volumeMounts:
+            - name: scripts
+              mountPath: /etc/volsync-failover
+      volumes:
+        - name: scripts
+          configMap:
+            name: volsync-failover-scripts
