@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster/infrastructure-crds.yaml
+  - cluster/infrastructure-controllers.yaml
+  - cluster/infrastructure-storage.yaml
+  - cluster/apps-kustomization.yaml
+  - cluster/operations-kustomization.yaml

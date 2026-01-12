@@ -23,6 +23,13 @@ spec:
             - |
               chmod +x /etc/volsync-failover/monitor.sh /etc/volsync-failover/failover.sh || true
               /etc/volsync-failover/monitor.sh
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
           volumeMounts:
             - name: scripts
               mountPath: /etc/volsync-failover

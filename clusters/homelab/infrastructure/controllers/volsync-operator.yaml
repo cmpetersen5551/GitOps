@@ -60,8 +60,80 @@ metadata:
   name: volsync-manager-role
 rules:
   - apiGroups:
-      - "*"
+      - ""
     resources:
-      - "*"
+      - pods
+      - persistentvolumeclaims
+      - persistentvolumes
+      - services
+      - serviceaccounts
+      - secrets
+      - configmaps
+      - events
     verbs:
-      - "*"
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - volsync.backube
+    resources:
+      - replicationsources
+      - replicationdestinations
+      - replicationsources/status
+      - replicationdestinations/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - snapshot.storage.k8s.io
+    resources:
+      - volumesnapshots
+      - volumesnapshotclasses
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
