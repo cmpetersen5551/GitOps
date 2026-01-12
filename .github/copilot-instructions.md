@@ -136,10 +136,10 @@ flux diff kustomization <name> --path=clusters/homelab/<path>
 
 ## Documentation
 
-- **[clusters/homelab/docs/README.md](../clusters/homelab/docs/README.md)** - Quick start & overview
-- **[clusters/homelab/docs/ARCHITECTURE.md](../clusters/homelab/docs/ARCHITECTURE.md)** - System design, deployment model, storage architecture
-- **[clusters/homelab/docs/HARDWARE.md](../clusters/homelab/docs/HARDWARE.md)** - Node inventory, storage layout, HA patterns
-- **[clusters/homelab/docs/OPERATIONS.md](../clusters/homelab/docs/OPERATIONS.md)** - Operational runbook, monitoring, troubleshooting, disaster recovery
+- **clusters/homelab/docs/README.md** - Quick start & overview
+- **clusters/homelab/docs/ARCHITECTURE.md** - System design, deployment model, storage architecture
+- **clusters/homelab/docs/HARDWARE.md** - Node inventory, storage layout, HA patterns
+- **clusters/homelab/docs/OPERATIONS.md** - Operational runbook, monitoring, troubleshooting, disaster recovery
 
 ## AI Agent Notes
 
