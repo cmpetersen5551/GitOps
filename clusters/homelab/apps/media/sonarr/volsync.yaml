@@ -1,0 +1,35 @@
+# Example VolSync ReplicationSource for Sonarr
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: sonarr-source
+  namespace: media
+spec:
+  sourcePVC: pvc-sonarr
+  trigger:
+    schedule: "*/5 * * * *" # every 5 minutes
+  syncthing:
+    # VolSync will manage Syncthing pods for data transfer
+    options:
+      # Add any Syncthing-specific options here
+    retain:
+      hourly: 2
+      daily: 1
+---
+# Example ReplicationDestination for failover
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationDestination
+metadata:
+  name: sonarr-dest
+  namespace: media
+spec:
+  destinationPVC: pvc-sonarr-backup
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 5Gi
+  syncthing:
+    options:
+      # Add any Syncthing-specific options here

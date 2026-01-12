@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-monitor
+  namespace: operations
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: volsync-monitor
+  template:
+    metadata:
+      labels:
+        app: volsync-monitor
+    spec:
+      serviceAccountName: volsync-monitor
+      containers:
+        - name: monitor
+          image: bitnami/kubectl:1.27
+          command:
+            - /bin/sh
+            - -c
+            - |
+              chmod +x /etc/volsync-failover/monitor.sh /etc/volsync-failover/failover.sh || true
+              /etc/volsync-failover/monitor.sh
+          env:
+            - name: PRIMARY_NODE
+              value: k3s-w1
+            - name: NAMESPACE
+              value: media
+            - name: DEPLOYMENT
+              value: sonarr
+            - name: PRIMARY_PVC
+              value: pvc-sonarr
+            - name: BACKUP_PVC
+              value: pvc-sonarr-backup
+            - name: VOLUME_NAME
+              value: sonarr-data
+            - name: CHECK_INTERVAL
+              value: "30"
+            - name: THRESHOLD
+              value: "120"
+            - name: COOLDOWN
+              value: "300"
+            - name: AUTO_FAILOVER
+              value: "false"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /etc/volsync-failover
+      volumes:
+        - name: scripts
+          configMap:
+            name: volsync-failover-scripts

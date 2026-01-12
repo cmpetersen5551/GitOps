@@ -1,0 +1,84 @@
+#!/bin/bash
+# GitOps Repository Validation Script
+# Validates all manifests before committing changes
+# All commands use dry-run or read-only operations
+# See .copilot-instructions.md for overview
+
+set -e
+
+echo "=== Validating GitOps Repository ==="
+
+echo "→ Step 1: Kustomize builds"
+kubectl kustomize clusters/homelab/infrastructure/crds > /dev/null
+kubectl kustomize clusters/homelab/infrastructure/controllers > /dev/null
+kubectl kustomize clusters/homelab/infrastructure/storage > /dev/null
+kubectl kustomize clusters/homelab/operations > /dev/null
+kubectl kustomize clusters/homelab/apps > /dev/null
+echo "✓ All kustomize builds successful"
+
+echo "→ Step 2: Kubernetes dry-run validation (client-side)"
+kubectl apply --dry-run=client -k clusters/homelab/infrastructure/crds > /dev/null
+kubectl apply --dry-run=client -k clusters/homelab/infrastructure/controllers > /dev/null
+kubectl apply --dry-run=client -k clusters/homelab/infrastructure/storage > /dev/null
+kubectl apply --dry-run=client -k clusters/homelab/operations > /dev/null
+echo "✓ Infrastructure and operations resources valid"
+
+# Note: Apps may fail client-side dry-run if CRDs aren't in cluster yet
+echo "→ Step 2b: Apps validation (may show CRD warnings)"
+if kubectl apply --dry-run=client -k clusters/homelab/apps > /dev/null 2>&1; then
+  echo "✓ All app resources valid"
+else
+  echo "⚠ Apps validation requires CRDs to be installed (expected if cluster is fresh)"
+fi
+
+echo "→ Step 3: YAML syntax check"
+if command -v yamllint &> /dev/null; then
+  if ! yamllint -d relaxed clusters/homelab/ > /dev/null 2>&1; then
+    echo "✖ YAML syntax check failed. Run 'yamllint clusters/homelab/' to see errors."
+    exit 1
+  fi
+  echo "✓ YAML syntax valid"
+else
+  echo "✖ yamllint not installed. Please install it (e.g., 'brew install yamllint' or 'pip install yamllint')."
+  exit 1
+fi
+
+echo "→ Step 4: Check for placeholder values"
+PLACEHOLDERS=$(grep -r "<.*>" clusters/homelab/ --include="*.yaml" | grep -v "# " | grep -v "flux-system/gotk-components.yaml" | grep -v "description:" | wc -l | tr -d ' ')
+if [ "$PLACEHOLDERS" -gt 0 ]; then
+  echo "⚠ Found $PLACEHOLDERS placeholder values that may need replacement:"
+  grep -r "<.*>" clusters/homelab/ --include="*.yaml" | grep -v "# " | grep -v "flux-system/gotk-components.yaml" | grep -v "description:"
+  exit 1
+else
+  echo "✓ No unresolved placeholders"
+fi
+
+echo "→ Step 5: PV/PVC storage capacity matching"
+MISMATHES=0
+# Find all PVCs and check if their requested storage matches the PV they claim (if statically bound)
+for PVC_FILE in $(find clusters/homelab/apps -name "*.yaml" -exec grep -l "kind: PersistentVolumeClaim" {} \;); do
+  PVC_NAME=$(grep -A 1 "metadata:" "$PVC_FILE" | grep "name:" | awk '{print $2}')
+  PVC_PV=$(grep "volumeName:" "$PVC_FILE" | awk '{print $2}')
+  PVC_STORAGE=$(grep -A 5 "requests:" "$PVC_FILE" | grep "storage:" | awk '{print $2}' | tr -d '"')
+  
+  if [ -n "$PVC_PV" ]; then
+    PV_FILE=$(find clusters/homelab/infrastructure/storage -name "*.yaml" -exec grep -l "name: $PVC_PV" {} \;)
+    if [ -n "$PV_FILE" ]; then
+      PV_STORAGE=$(grep -A 5 "capacity:" "$PV_FILE" | grep "storage:" | awk '{print $2}' | tr -d '"')
+      if [ "$PVC_STORAGE" != "$PV_STORAGE" ]; then
+        echo "✖ Capacity mismatch: PVC '$PVC_NAME' ($PVC_STORAGE) != PV '$PVC_PV' ($PV_STORAGE) in $PVC_FILE"
+        MISMATHES=$((MISMATHES + 1))
+      fi
+    fi
+  fi
+done
+
+if [ "$MISMATHES" -gt 0 ]; then
+  exit 1
+else
+  echo "✓ All static PV/PVC capacities match"
+fi
+
+echo ""
+echo "=== All validation checks passed ==="
+echo "Repository is ready to commit"

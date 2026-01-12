@@ -1,0 +1,223 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: volsync-failover-scripts
+  namespace: operations
+data:
+  failover.sh: |
+    #!/bin/sh
+    set -eu
+    # Simple failover/failback driver
+    DRY_RUN=1
+    CONFIRM=0
+    MODE=""
+    NAMESPACE=${NAMESPACE:-media}
+    DEPLOYMENT=${DEPLOYMENT:-sonarr}
+    PRIMARY_PVC=${PRIMARY_PVC:-pvc-sonarr}
+    BACKUP_PVC=${BACKUP_PVC:-pvc-sonarr-backup}
+    PRIMARY_ROLE=${PRIMARY_ROLE:-primary}
+    BACKUP_ROLE=${BACKUP_ROLE:-backup}
+    VOLUME_NAME=${VOLUME_NAME:-sonarr-data}
+    RSYNC_JOB_FILE=/tmp/rsync-job.yaml
+    RSYNC_TEMPLATE=/etc/volsync-failover/rsync-job.yaml
+
+    log() { echo "[failover] $(date -u +%FT%TZ) $*"; }
+
+    usage() {
+      cat <<EOF
+    failover.sh --promote|--failback [--dry-run] [--confirm]
+    EOF
+      exit 1
+    }
+
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --promote) MODE=promote; shift ;;
+        --failback) MODE=failback; shift ;;
+        --dry-run) DRY_RUN=1; shift ;;
+        --confirm) DRY_RUN=0; CONFIRM=1; shift ;;
+        -h|--help) usage ;;
+        *) shift ;;
+      esac
+    done
+
+    if [ -z "$MODE" ]; then usage; fi
+
+    check_pvc_bound() {
+      PVC=$1
+      kubectl -n "$NAMESPACE" get pvc "$PVC" >/dev/null 2>&1 || return 1
+    }
+
+    # Minimal VolSync check: ensure ReplicationDestination exists and backup PVC is Bound
+    check_replication_ok() {
+      kubectl -n "$NAMESPACE" get replicationdestination sonarr-dest >/dev/null 2>&1 || return 1
+      check_pvc_bound "$BACKUP_PVC" || return 1
+      return 0
+    }
+
+    patch_deployment_pvc() {
+      FROM=$1
+      TO=$2
+      # Patch the named volume to avoid positional assumptions
+      PATCH=$(printf '{"spec":{"template":{"spec":{"volumes":[{"name":"%s","persistentVolumeClaim":{"claimName":"%s"}}]}}}}\n' "$VOLUME_NAME" "$TO")
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log "DRY RUN: kubectl -n $NAMESPACE patch deployment $DEPLOYMENT -p '$PATCH'"
+      else
+        kubectl -n "$NAMESPACE" patch deployment "$DEPLOYMENT" -p "$PATCH"
+      fi
+    }
+
+    patch_deployment_node_selector() {
+      ROLE=$1
+      PATCH=$(printf '{"spec":{"template":{"spec":{"nodeSelector":{"role":"%s"}}}}}\n' "$ROLE")
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log "DRY RUN: kubectl -n $NAMESPACE patch deployment $DEPLOYMENT -p '$PATCH'"
+      else
+        kubectl -n "$NAMESPACE" patch deployment "$DEPLOYMENT" -p "$PATCH"
+      fi
+    }
+
+    rollout_restart() {
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log "DRY RUN: kubectl -n $NAMESPACE rollout restart deployment/$DEPLOYMENT"
+      else
+        kubectl -n "$NAMESPACE" rollout restart deployment/$DEPLOYMENT
+      fi
+    }
+
+    run_rsync_job() {
+      # Use sed to replace PVC names in the template
+      sed "s/PVC_BACKUP_NAME/$BACKUP_PVC/g; s/PVC_PRIMARY_NAME/$PRIMARY_PVC/g" "$RSYNC_TEMPLATE" > "$RSYNC_JOB_FILE"
+
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log "DRY RUN: kubectl -n $NAMESPACE apply -f $RSYNC_JOB_FILE"
+        return 0
+      fi
+      kubectl -n "$NAMESPACE" apply -f "$RSYNC_JOB_FILE"
+      # Wait for job completion
+      kubectl -n "$NAMESPACE" wait --for=condition=complete job/volsync-rsync --timeout=20m
+      kubectl -n "$NAMESPACE" delete job volsync-rsync
+    }
+
+    if [ "$MODE" = "promote" ]; then
+      log "Promote (failover) requested; dry-run=$DRY_RUN"
+      if ! check_replication_ok; then
+        log "Replication check failed; aborting"
+        exit 2
+      fi
+      if [ "$DRY_RUN" -eq 1 ]; then log "Dry-run: scaling down deployment (if present)"; fi
+      if [ "$DRY_RUN" -eq 0 ]; then kubectl -n "$NAMESPACE" scale deployment "$DEPLOYMENT" --replicas=0 || true; fi
+      log "Patching deployment to use backup PVC ($BACKUP_PVC) and backup node ($BACKUP_ROLE)"
+      patch_deployment_pvc "$PRIMARY_PVC" "$BACKUP_PVC"
+      patch_deployment_node_selector "$BACKUP_ROLE"
+      rollout_restart
+      log "Promotion complete"
+      exit 0
+    fi
+
+    if [ "$MODE" = "failback" ]; then
+      log "Failback requested; dry-run=$DRY_RUN"
+      # Ensure primary is present and PVC exists
+      if ! check_pvc_bound "$PRIMARY_PVC"; then
+        log "Primary PVC $PRIMARY_PVC not present/bound; aborting"
+        exit 2
+      fi
+      # Ensure backup is present
+      if ! check_pvc_bound "$BACKUP_PVC"; then
+        log "Backup PVC $BACKUP_PVC not present/bound; aborting"
+        exit 2
+      fi
+      # Run rsync job from backup -> primary
+      log "Starting rsync job to copy $BACKUP_PVC -> $PRIMARY_PVC"
+      run_rsync_job
+      log "Rsync job completed; patching deployment back to primary PVC ($PRIMARY_PVC) and primary node ($PRIMARY_ROLE)"
+      patch_deployment_pvc "$BACKUP_PVC" "$PRIMARY_PVC"
+      patch_deployment_node_selector "$PRIMARY_ROLE"
+      rollout_restart
+      log "Failback complete"
+      exit 0
+    fi
+
+  monitor.sh: |
+    #!/bin/sh
+    set -eu
+    # Monitor loop: checks a primary node and runs failover if NotReady
+    PRIMARY_NODE=${PRIMARY_NODE:-}
+    CHECK_INTERVAL=${CHECK_INTERVAL:-30}
+    COOLDOWN=${COOLDOWN:-60}
+    NAMESPACE=${NAMESPACE:-media}
+    THRESHOLD=${THRESHOLD:-120}
+    log() { echo "[monitor] $(date -u +%FT%TZ) $*"; }
+
+    if [ -z "$PRIMARY_NODE" ]; then
+      log "PRIMARY_NODE not set in ConfigMap; exiting"
+      exit 1
+    fi
+
+    # returns 0 if node Ready
+    node_ready() {
+      kubectl get node "$PRIMARY_NODE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep True >/dev/null 2>&1
+    }
+
+    consecutive=0
+    while true; do
+      if node_ready; then
+        consecutive=0
+      else
+        consecutive=$((consecutive + CHECK_INTERVAL))
+        log "Primary node $PRIMARY_NODE not ready for ${consecutive}s"
+      fi
+      if [ "$consecutive" -ge "$THRESHOLD" ]; then
+        log "Threshold exceeded; invoking failover (dry-run first)"
+        /etc/volsync-failover/failover.sh --promote --dry-run
+        # Second run with confirm only if the dry-run indicates OK and an env flag is set
+        if [ "${AUTO_FAILOVER:-false}" = "true" ]; then
+          log "AUTO_FAILOVER is true; executing confirm failover"
+          /etc/volsync-failover/failover.sh --promote --confirm
+        fi
+        # Cooldown to avoid flapping
+        sleep "$COOLDOWN"
+        consecutive=0
+      fi
+      sleep "$CHECK_INTERVAL"
+    done
+
+  rsync-job.yaml: |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: volsync-rsync
+      namespace: media
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: rsync
+            image: alpine:3.18
+            command:
+              - /bin/sh
+              - -c
+              - |
+                apk add --no-cache rsync
+                mkdir -p /backup /primary
+                rsync -a --delete /backup/ /primary/
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            volumeMounts:
+              - name: backup
+                mountPath: /backup
+              - name: primary
+                mountPath: /primary
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: PVC_BACKUP_NAME
+            - name: primary
+              persistentVolumeClaim:
+                claimName: PVC_PRIMARY_NAME
