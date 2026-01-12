@@ -23,6 +23,27 @@ spec:
             - |
               chmod +x /etc/volsync-failover/monitor.sh /etc/volsync-failover/failover.sh || true
               /etc/volsync-failover/monitor.sh
+          env:
+            - name: PRIMARY_NODE
+              value: k3s-w1
+            - name: NAMESPACE
+              value: media
+            - name: DEPLOYMENT
+              value: sonarr
+            - name: PRIMARY_PVC
+              value: pvc-sonarr
+            - name: BACKUP_PVC
+              value: pvc-sonarr-backup
+            - name: VOLUME_NAME
+              value: sonarr-data
+            - name: CHECK_INTERVAL
+              value: "30"
+            - name: THRESHOLD
+              value: "120"
+            - name: COOLDOWN
+              value: "300"
+            - name: AUTO_FAILOVER
+              value: "false"
           resources:
             requests:
               cpu: 50m

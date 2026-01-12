@@ -24,12 +24,12 @@ metadata:
   namespace: media
 spec:
   destinationPVC: pvc-sonarr-backup
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 5Gi
   syncthing:
     options:
       # Add any Syncthing-specific options here
-    accessModes:
-      - ReadWriteOnce
-    storageClassName: local-path
-    resources:
-      requests:
-        storage: 5Gi

@@ -8,7 +8,7 @@ spec:
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-path
+  storageClassName: ""
   hostPath:
     path: /data/pods/sonarr
     type: DirectoryOrCreate

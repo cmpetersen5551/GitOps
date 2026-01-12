@@ -15,6 +15,7 @@ data:
     DEPLOYMENT=${DEPLOYMENT:-sonarr}
     PRIMARY_PVC=${PRIMARY_PVC:-pvc-sonarr}
     BACKUP_PVC=${BACKUP_PVC:-pvc-sonarr-backup}
+    VOLUME_NAME=${VOLUME_NAME:-sonarr-data}
     RSYNC_JOB_FILE=/etc/volsync-failover/rsync-job.yaml
 
     log() { echo "[failover] $(date -u +%FT%TZ) $*"; }
@@ -54,12 +55,12 @@ data:
     patch_deployment_pvc() {
       FROM=$1
       TO=$2
-      # This JSON patch assumes the first volume is the PVC; adjust if different
-      PATCH="[{\"op\":\"replace\",\"path\":\"/spec/template/spec/volumes/0/persistentVolumeClaim/claimName\",\"value\":\"${TO}\"}]"
+      # Patch the named volume to avoid positional assumptions
+      PATCH=$(printf '{"spec":{"template":{"spec":{"volumes":[{"name":"%s","persistentVolumeClaim":{"claimName":"%s"}}]}}}}\n' "$VOLUME_NAME" "$TO")
       if [ "$DRY_RUN" -eq 1 ]; then
-        log "DRY RUN: kubectl -n $NAMESPACE patch deployment $DEPLOYMENT --type=json -p '$PATCH'"
+        log "DRY RUN: kubectl -n $NAMESPACE patch deployment $DEPLOYMENT -p '$PATCH'"
       else
-        kubectl -n "$NAMESPACE" patch deployment "$DEPLOYMENT" --type=json -p "$PATCH"
+        kubectl -n "$NAMESPACE" patch deployment "$DEPLOYMENT" -p "$PATCH"
       fi
     }
 

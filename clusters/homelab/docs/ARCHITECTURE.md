@@ -99,6 +99,7 @@ Stateful applications (e.g., Sonarr, Radarr, etc.) need high availability:
 - `pv-<app>-backup` — bound to k3s-w2 via nodeAffinity (optional)
 - Both point to `/data/pods/<app>` (local directories on respective nodes)
 - Example: `pv-sonarr-primary`, `pv-sonarr-backup`
+- Implemented with `hostPath` + `DirectoryOrCreate` so the folder is created automatically on the target node; no storageClass is set to avoid the local-path dynamic provisioner and keep these volumes truly static/pre-bound.
 
 **VolSync Replication** (managed by infrastructure-controllers):
 - ReplicationSource on primary PVC
