@@ -8,24 +8,31 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-      - name: rsync
-        image: alpine:3.18
-        command:
-          - /bin/sh
-          - -c
-          - |
-            apk add --no-cache rsync
-            mkdir -p /backup /primary
-            rsync -a --delete /backup/ /primary/
-        volumeMounts:
-          - name: backup
-            mountPath: /backup
-          - name: primary
-            mountPath: /primary
+        - name: rsync
+          image: alpine:3.18
+          command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              mkdir -p /backup /primary
+              rsync -a --delete /backup/ /primary/
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+            - name: primary
+              mountPath: /primary
       volumes:
         - name: backup
           persistentVolumeClaim:
-            claimName: pvc-sonarr-backup
+            claimName: PVC_BACKUP_NAME
         - name: primary
           persistentVolumeClaim:
-            claimName: pvc-sonarr
+            claimName: PVC_PRIMARY_NAME

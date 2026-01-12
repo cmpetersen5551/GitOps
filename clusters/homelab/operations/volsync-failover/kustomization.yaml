@@ -4,5 +4,3 @@ resources:
   - configmap.yaml
   - rbac.yaml
   - monitor-deployment.yaml
-  - rsync-job.yaml
-  

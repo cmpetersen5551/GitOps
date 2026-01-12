@@ -18,16 +18,16 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get","list","watch"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get","list","patch","update"]
+    verbs: ["get", "list", "patch", "update"]
   - apiGroups: [""]
-    resources: ["pods","persistentvolumeclaims","jobs"]
-    verbs: ["get","list","create","delete","patch"]
+    resources: ["pods", "persistentvolumeclaims", "jobs"]
+    verbs: ["get", "list", "create", "delete", "patch"]
   - apiGroups: ["volsync.backube"]
-    resources: ["replicationsources","replicationdestinations"]
-    verbs: ["get","list","watch"]
+    resources: ["replicationsources", "replicationdestinations"]
+    verbs: ["get", "list", "watch"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1

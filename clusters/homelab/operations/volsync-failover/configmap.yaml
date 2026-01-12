@@ -15,8 +15,11 @@ data:
     DEPLOYMENT=${DEPLOYMENT:-sonarr}
     PRIMARY_PVC=${PRIMARY_PVC:-pvc-sonarr}
     BACKUP_PVC=${BACKUP_PVC:-pvc-sonarr-backup}
+    PRIMARY_ROLE=${PRIMARY_ROLE:-primary}
+    BACKUP_ROLE=${BACKUP_ROLE:-backup}
     VOLUME_NAME=${VOLUME_NAME:-sonarr-data}
-    RSYNC_JOB_FILE=/etc/volsync-failover/rsync-job.yaml
+    RSYNC_JOB_FILE=/tmp/rsync-job.yaml
+    RSYNC_TEMPLATE=/etc/volsync-failover/rsync-job.yaml
 
     log() { echo "[failover] $(date -u +%FT%TZ) $*"; }
 
@@ -64,6 +67,16 @@ data:
       fi
     }
 
+    patch_deployment_node_selector() {
+      ROLE=$1
+      PATCH=$(printf '{"spec":{"template":{"spec":{"nodeSelector":{"role":"%s"}}}}}\n' "$ROLE")
+      if [ "$DRY_RUN" -eq 1 ]; then
+        log "DRY RUN: kubectl -n $NAMESPACE patch deployment $DEPLOYMENT -p '$PATCH'"
+      else
+        kubectl -n "$NAMESPACE" patch deployment "$DEPLOYMENT" -p "$PATCH"
+      fi
+    }
+
     rollout_restart() {
       if [ "$DRY_RUN" -eq 1 ]; then
         log "DRY RUN: kubectl -n $NAMESPACE rollout restart deployment/$DEPLOYMENT"
@@ -73,7 +86,9 @@ data:
     }
 
     run_rsync_job() {
-      # Apply the rsync job template (already contains correct PVC names)
+      # Use sed to replace PVC names in the template
+      sed "s/PVC_BACKUP_NAME/$BACKUP_PVC/g; s/PVC_PRIMARY_NAME/$PRIMARY_PVC/g" "$RSYNC_TEMPLATE" > "$RSYNC_JOB_FILE"
+
       if [ "$DRY_RUN" -eq 1 ]; then
         log "DRY RUN: kubectl -n $NAMESPACE apply -f $RSYNC_JOB_FILE"
         return 0
@@ -81,6 +96,7 @@ data:
       kubectl -n "$NAMESPACE" apply -f "$RSYNC_JOB_FILE"
       # Wait for job completion
       kubectl -n "$NAMESPACE" wait --for=condition=complete job/volsync-rsync --timeout=20m
+      kubectl -n "$NAMESPACE" delete job volsync-rsync
     }
 
     if [ "$MODE" = "promote" ]; then
@@ -91,8 +107,9 @@ data:
       fi
       if [ "$DRY_RUN" -eq 1 ]; then log "Dry-run: scaling down deployment (if present)"; fi
       if [ "$DRY_RUN" -eq 0 ]; then kubectl -n "$NAMESPACE" scale deployment "$DEPLOYMENT" --replicas=0 || true; fi
-      log "Patching deployment to use backup PVC: $BACKUP_PVC"
+      log "Patching deployment to use backup PVC ($BACKUP_PVC) and backup node ($BACKUP_ROLE)"
       patch_deployment_pvc "$PRIMARY_PVC" "$BACKUP_PVC"
+      patch_deployment_node_selector "$BACKUP_ROLE"
       rollout_restart
       log "Promotion complete"
       exit 0
@@ -113,8 +130,9 @@ data:
       # Run rsync job from backup -> primary
       log "Starting rsync job to copy $BACKUP_PVC -> $PRIMARY_PVC"
       run_rsync_job
-      log "Rsync job completed; patching deployment back to primary PVC: $PRIMARY_PVC"
+      log "Rsync job completed; patching deployment back to primary PVC ($PRIMARY_PVC) and primary node ($PRIMARY_ROLE)"
       patch_deployment_pvc "$BACKUP_PVC" "$PRIMARY_PVC"
+      patch_deployment_node_selector "$PRIMARY_ROLE"
       rollout_restart
       log "Failback complete"
       exit 0
@@ -184,6 +202,13 @@ data:
                 apk add --no-cache rsync
                 mkdir -p /backup /primary
                 rsync -a --delete /backup/ /primary/
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
             volumeMounts:
               - name: backup
                 mountPath: /backup
@@ -192,7 +217,7 @@ data:
           volumes:
             - name: backup
               persistentVolumeClaim:
-                claimName: pvc-sonarr-backup
+                claimName: PVC_BACKUP_NAME
             - name: primary
               persistentVolumeClaim:
-                claimName: pvc-sonarr
+                claimName: PVC_PRIMARY_NAME
