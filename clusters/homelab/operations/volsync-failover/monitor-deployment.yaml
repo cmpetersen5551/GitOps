@@ -16,7 +16,7 @@ spec:
       serviceAccountName: volsync-monitor
       initContainers:
         - name: copy-scripts
-          image: bitnami/kubectl@sha256:ae4bb851c280dae99fc2f0ca15eb7719a92721f2c13d757e63bf6e2e557a8cfc
+          image: bitnami/kubectl@sha256:554ab88b1858e8424c55de37ad417b16f2a0e65d1607aa0f3fe3ce9b9f10b131
           command:
             - /bin/sh
             - -c
@@ -30,7 +30,7 @@ spec:
               mountPath: /tmp/scripts
       containers:
         - name: monitor
-          image: bitnami/kubectl@sha256:ae4bb851c280dae99fc2f0ca15eb7719a92721f2c13d757e63bf6e2e557a8cfc
+          image: bitnami/kubectl@sha256:554ab88b1858e8424c55de37ad417b16f2a0e65d1607aa0f3fe3ce9b9f10b131
           command:
             - /bin/sh
             - -c
