@@ -16,7 +16,7 @@ spec:
       containers:
         - command:
             - /manager
-          image: ghcr.io/backube/volsync:v0.8.2
+          image: quay.io/backube/volsync:0.14.0
           name: manager
           ports:
             - containerPort: 9443
