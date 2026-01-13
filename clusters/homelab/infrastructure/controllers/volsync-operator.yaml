@@ -58,6 +58,7 @@ rules:
       - ""
     resources:
       - pods
+      - namespaces
       - persistentvolumeclaims
       - persistentvolumes
       - services
