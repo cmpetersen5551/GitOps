@@ -1,35 +1,33 @@
-# Example VolSync ReplicationSource for Sonarr
+# VolSync Syncthing ReplicationSource for Sonarr primary node
+# This syncs pvc-sonarr (primary) with pvc-sonarr-backup (backup)
 apiVersion: volsync.backube/v1alpha1
 kind: ReplicationSource
 metadata:
-  name: sonarr-source
+  name: sonarr-primary
   namespace: media
 spec:
   sourcePVC: pvc-sonarr
-  trigger:
-    schedule: "*/5 * * * *" # every 5 minutes
   syncthing:
-    # VolSync will manage Syncthing pods for data transfer
-    options:
-      # Add any Syncthing-specific options here
-    retain:
-      hourly: 2
-      daily: 1
+    serviceType: ClusterIP
+    # Will be populated with peer info once backup ReplicationSource is deployed
+    # peers:
+    # - ID: <backup-syncthing-id>
+    #   address: tcp://<backup-service-address>:22000
+    #   introducer: false
 ---
-# Example ReplicationDestination for failover
+# VolSync Syncthing ReplicationSource for Sonarr backup node
+# This is the peer that syncs with the primary
 apiVersion: volsync.backube/v1alpha1
-kind: ReplicationDestination
+kind: ReplicationSource
 metadata:
-  name: sonarr-dest
+  name: sonarr-backup
   namespace: media
 spec:
-  destinationPVC: pvc-sonarr-backup
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ""
-  resources:
-    requests:
-      storage: 5Gi
+  sourcePVC: pvc-sonarr-backup
   syncthing:
-    options:
-      # Add any Syncthing-specific options here
+    serviceType: ClusterIP
+    # Will be populated with peer info once primary ReplicationSource is deployed
+    # peers:
+    # - ID: <primary-syncthing-id>
+    #   address: tcp://<primary-service-address>:22000
+    #   introducer: false
