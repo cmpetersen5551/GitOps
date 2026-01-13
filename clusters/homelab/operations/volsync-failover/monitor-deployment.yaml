@@ -14,6 +14,20 @@ spec:
         app: volsync-monitor
     spec:
       serviceAccountName: volsync-monitor
+      initContainers:
+        - name: copy-scripts
+          image: bitnami/kubectl@sha256:ae4bb851c280dae99fc2f0ca15eb7719a92721f2c13d757e63bf6e2e557a8cfc
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cp -a /etc/volsync-failover/. /tmp/scripts/ || true
+              chmod +x /tmp/scripts/monitor.sh /tmp/scripts/failover.sh || true
+          volumeMounts:
+            - name: scripts-src
+              mountPath: /etc/volsync-failover
+            - name: scripts
+              mountPath: /tmp/scripts
       containers:
         - name: monitor
           image: bitnami/kubectl@sha256:ae4bb851c280dae99fc2f0ca15eb7719a92721f2c13d757e63bf6e2e557a8cfc
@@ -21,8 +35,7 @@ spec:
             - /bin/sh
             - -c
             - |
-              chmod +x /etc/volsync-failover/monitor.sh /etc/volsync-failover/failover.sh || true
-              /etc/volsync-failover/monitor.sh
+              /tmp/scripts/monitor.sh
           env:
             - name: PRIMARY_NODE
               value: k3s-w1
@@ -53,8 +66,10 @@ spec:
               memory: 128Mi
           volumeMounts:
             - name: scripts
-              mountPath: /etc/volsync-failover
+              mountPath: /tmp/scripts
       volumes:
-        - name: scripts
+        - name: scripts-src
           configMap:
             name: volsync-failover-scripts
+        - name: scripts
+          emptyDir: {}
