@@ -16,7 +16,7 @@ spec:
       serviceAccountName: volsync-monitor
       containers:
         - name: monitor
-          image: bitnami/kubectl@sha256:c96a17c594af74e1e6f56ac9813ec238fd6cb34ba8649c7e15257d5af32bee4f
+          image: bitnami/kubectl@sha256:ae4bb851c280dae99fc2f0ca15eb7719a92721f2c13d757e63bf6e2e557a8cfc
           command:
             - /bin/sh
             - -c
