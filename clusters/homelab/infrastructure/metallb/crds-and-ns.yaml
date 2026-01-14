@@ -224,6 +224,54 @@ spec:
           status:
             type: object
 ---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: bgppeers.metallb.io
+spec:
+  group: metallb.io
+  scope: Namespaced
+  names:
+    kind: BGPPeer
+    plural: bgppeers
+  versions:
+  - name: v1beta1
+    served: true
+    storage: false
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              peerAddress:
+                type: string
+              peerASN:
+                type: integer
+              myASN:
+                type: integer
+          status:
+            type: object
+  - name: v1beta2
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              peerAddress:
+                type: string
+              peerASN:
+                type: integer
+              myASN:
+                type: integer
+          status:
+            type: object
+---
 apiVersion: v1
 kind: Namespace
 metadata:
