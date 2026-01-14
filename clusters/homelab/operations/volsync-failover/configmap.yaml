@@ -106,7 +106,9 @@ data:
         exit 2
       fi
       if [ "$DRY_RUN" -eq 1 ]; then log "Dry-run: scaling down deployment (if present)"; fi
-      if [ "$DRY_RUN" -eq 0 ]; then kubectl -n "$NAMESPACE" scale deployment "$DEPLOYMENT" --replicas=0 || true; fi
+      if [ "$DRY_RUN" -eq 0 ]; then
+        kubectl -n "$NAMESPACE" scale deployment "$DEPLOYMENT" --replicas=0 || log "Warning: Could not scale deployment (may already be migrating)"
+      fi
       log "Patching deployment to use backup PVC ($BACKUP_PVC) and backup node ($BACKUP_ROLE)"
       patch_deployment_pvc "$PRIMARY_PVC" "$BACKUP_PVC"
       patch_deployment_node_selector "$BACKUP_ROLE"
