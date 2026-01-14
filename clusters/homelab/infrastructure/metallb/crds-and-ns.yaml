@@ -66,5 +66,7 @@ spec:
                   type: string
               nodeSelectors:
                 type: array
+                items:
+                  type: object
           status:
             type: object
