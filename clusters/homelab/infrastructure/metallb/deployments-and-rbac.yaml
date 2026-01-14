@@ -132,10 +132,7 @@ rules:
   resources: ["poddisruptionbudgets"]
   verbs: ["list", "watch"]
 - apiGroups: ["metallb.io"]
-  resources: ["addresspools"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["metallb.io"]
-  resources: ["l2advertisements"]
+  resources: ["addresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -150,10 +147,7 @@ rules:
   resources: ["endpoints"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["metallb.io"]
-  resources: ["addresspools"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["metallb.io"]
-  resources: ["l2advertisements"]
+  resources: ["addresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
