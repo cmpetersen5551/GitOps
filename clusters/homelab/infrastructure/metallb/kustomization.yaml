@@ -5,7 +5,8 @@ namespace: metallb-system
 
 resources:
   - namespace.yaml
-  - metallb.yaml
+  - helmrepo.yaml
+  - helmrelease.yaml
   - config.yaml
 
 commonLabels:
