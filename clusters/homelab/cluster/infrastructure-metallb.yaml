@@ -8,7 +8,7 @@ spec:
   path: ./clusters/homelab/infrastructure/metallb
   prune: true
   wait: true
-  timeout: 2m
+  timeout: 5m
   dependsOn:
     - name: infrastructure-crds
     - name: infrastructure-controllers
