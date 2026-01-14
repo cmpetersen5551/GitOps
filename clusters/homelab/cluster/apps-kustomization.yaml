@@ -11,7 +11,7 @@ spec:
   timeout: 3m
   dependsOn:
     - name: infrastructure-storage
-    - name: infrastructure-metallb-config
+    - name: infrastructure-metallb
     - name: operations
   sourceRef:
     kind: GitRepository

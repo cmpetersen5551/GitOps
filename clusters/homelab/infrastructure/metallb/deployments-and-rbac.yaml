@@ -1,0 +1,178 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: metallb-system
+  labels:
+    app: metallb
+    component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metallb
+      component: controller
+  template:
+    metadata:
+      labels:
+        app: metallb
+        component: controller
+    spec:
+      serviceAccountName: controller
+      containers:
+      - name: controller
+        image: quay.io/metallb/controller:v0.13.10
+        args:
+        - --log-level=info
+        ports:
+        - containerPort: 7472
+          name: metrics
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: speaker
+  namespace: metallb-system
+  labels:
+    app: metallb
+    component: speaker
+spec:
+  selector:
+    matchLabels:
+      app: metallb
+      component: speaker
+  template:
+    metadata:
+      labels:
+        app: metallb
+        component: speaker
+    spec:
+      serviceAccountName: speaker
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      containers:
+      - name: speaker
+        image: quay.io/metallb/speaker:v0.13.10
+        args:
+        - --log-level=info
+        ports:
+        - containerPort: 7472
+          name: metrics
+        - containerPort: 7946
+          name: memberlist
+          protocol: TCP
+        - containerPort: 7946
+          name: memberlist-udp
+          protocol: UDP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            add:
+            - NET_RAW
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: controller
+  namespace: metallb-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: speaker
+  namespace: metallb-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-controller
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["services/status"]
+  verbs: ["patch", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["addresspools"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["l2advertisements"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-speaker
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["addresspools"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metallb.io"]
+  resources: ["l2advertisements"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-controller
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: metallb-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-speaker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-speaker
+subjects:
+- kind: ServiceAccount
+  name: speaker
+  namespace: metallb-system

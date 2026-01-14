@@ -1,12 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: metallb-system
-
 resources:
-  - namespace.yaml
-  - helmrepo.yaml
-  - helmrelease.yaml
+  - crds-and-ns.yaml
+  - deployments-and-rbac.yaml
+  - config.yaml
 
 commonLabels:
   app: metallb
