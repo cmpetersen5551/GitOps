@@ -3,7 +3,8 @@ kind: Kustomization
 
 resources:
   - crds-and-ns.yaml
-  - deployments-and-rbac.yaml
+  - rbac.yaml
+  - deployments.yaml
   - config.yaml
 
 commonLabels:
