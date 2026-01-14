@@ -1,4 +1,4 @@
-apiVersion: source.toolkit.fluxcd.io/v1beta3
+apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
 metadata:
   name: metallb
@@ -7,4 +7,5 @@ spec:
   interval: 1h
   url: oci://ghcr.io/metallb/charts
   type: oci
+
 
