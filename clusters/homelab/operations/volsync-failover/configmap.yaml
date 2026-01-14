@@ -48,9 +48,9 @@ data:
       kubectl -n "$NAMESPACE" get pvc "$PVC" >/dev/null 2>&1 || return 1
     }
 
-    # Minimal VolSync check: ensure ReplicationDestination exists and backup PVC is Bound
+    # Minimal VolSync check: ensure ReplicationSource exists and backup PVC is Bound
     check_replication_ok() {
-      kubectl -n "$NAMESPACE" get replicationdestination sonarr-dest >/dev/null 2>&1 || return 1
+      kubectl -n "$NAMESPACE" get replicationsource sonarr-backup >/dev/null 2>&1 || return 1
       check_pvc_bound "$BACKUP_PVC" || return 1
       return 0
     }
