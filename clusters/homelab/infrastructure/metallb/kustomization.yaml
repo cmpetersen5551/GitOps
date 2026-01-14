@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - crds-and-ns.yaml
   - rbac.yaml
-  - webhook-secret.yaml
   - deployments.yaml
   - config.yaml
 
