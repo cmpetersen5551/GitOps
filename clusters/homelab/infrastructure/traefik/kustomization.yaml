@@ -5,18 +5,4 @@ namespace: kube-system
 
 resources:
   - ingressclass.yaml
-
-patchesJson6902:
-  - target:
-      group: ""
-      version: v1
-      kind: Service
-      name: traefik
-      namespace: kube-system
-    patch: |-
-      - op: replace
-        path: /spec/ports/0/targetPort
-        value: 8000
-      - op: replace
-        path: /spec/ports/1/targetPort
-        value: 8443
+  - service.yaml
