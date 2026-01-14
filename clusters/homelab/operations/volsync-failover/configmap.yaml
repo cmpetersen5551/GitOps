@@ -170,13 +170,8 @@ data:
         log "Primary node $PRIMARY_NODE not ready for ${consecutive}s"
       fi
       if [ "$consecutive" -ge "$THRESHOLD" ]; then
-        log "Threshold exceeded; invoking failover (dry-run first)"
-        /tmp/scripts/failover.sh --promote --dry-run
-        # Second run with confirm only if the dry-run indicates OK and an env flag is set
-        if [ "${AUTO_FAILOVER:-false}" = "true" ]; then
-          log "AUTO_FAILOVER is true; executing confirm failover"
-          /tmp/scripts/failover.sh --promote --confirm
-        fi
+        log "Threshold exceeded; invoking failover"
+        /tmp/scripts/failover.sh --promote --confirm
         # Cooldown to avoid flapping
         sleep "$COOLDOWN"
         consecutive=0
