@@ -1,8 +1,10 @@
-apiVersion: source.toolkit.fluxcd.io/v1beta2
+apiVersion: source.toolkit.fluxcd.io/v1beta3
 kind: HelmRepository
 metadata:
   name: metallb
   namespace: metallb-system
 spec:
   interval: 1h
-  url: https://metallb.universe.tf
+  url: oci://ghcr.io/metallb/charts
+  type: oci
+
