@@ -40,7 +40,7 @@ rules:
   resources: ["validatingwebhookconfigurations"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["metallb.io"]
-  resources: ["addresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
+  resources: ["addresspools", "ipaddresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -64,7 +64,7 @@ rules:
   resources: ["configmaps"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["metallb.io"]
-  resources: ["addresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
+  resources: ["addresspools", "ipaddresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
