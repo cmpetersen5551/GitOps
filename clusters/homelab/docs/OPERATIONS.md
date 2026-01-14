@@ -250,6 +250,49 @@ kubectl debug node/k3s-w1 -it --image=ubuntu:22.04
 - Verify network connectivity between nodes
 - Trigger full resync (see ReplicationSource/Destination CRs for options)
 
+### MetalLB Controller Not Starting / CrashLoopBackOff
+
+**Symptoms:** MetalLB controller pod restarts repeatedly with cert-rotation errors in logs
+
+**Root cause:** MetalLB controller requires a TLS secret (`webhook-server-cert`) in the `metallb-system` namespace, even when running in L2 mode (no webhooks active). This secret is **not auto-created** by MetalLB and must be manually bootstrap during initial cluster setup.
+
+**Diagnosis:**
+```bash
+# Check controller pod logs
+kubectl logs -n metallb-system -l app=metallb,component=controller --tail=100
+
+# Look for cert-rotation errors like:
+# "error": "secret \"webhook-server-cert\" not found"
+
+# Verify secret exists
+kubectl get secret -n metallb-system webhook-server-cert
+# If secret doesn't exist, the pod will keep restarting
+```
+
+**Fix (Bootstrap for New Clusters):**
+
+Create a self-signed TLS certificate and secret:
+
+```bash
+# Generate self-signed cert (valid for 10 years)
+openssl req -x509 -newkey rsa:4096 -keyout tls.key -out tls.crt -days 3650 -nodes \
+  -subj "/CN=webhook.metallb-system.svc.cluster.local"
+
+# Create secret in metallb-system namespace
+kubectl create secret tls webhook-server-cert -n metallb-system \
+  --cert=tls.crt --key=tls.key
+
+# Verify
+kubectl get secret -n metallb-system webhook-server-cert
+
+# Clean up local files
+rm tls.key tls.crt
+```
+
+**Why this is needed:** The MetalLB controller includes webhook cert-rotation logic in its startup sequence. Even in L2 mode (where webhooks are not active), the controller attempts to manage this secret. If missing, the controller crashes. This is undocumented behavior in MetalLB and should be done during cluster bootstrap, before FluxCD deploys MetalLB.
+
+**Note:** Do not store this secret in Git. It's cluster-specific and should be created manually during bootstrap. If deploying to a new cluster, repeat the above steps.
+
 ## Common Tasks
 
 ### Adding a New Application
