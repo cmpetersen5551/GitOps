@@ -10,6 +10,7 @@ spec:
   wait: true
   timeout: 2m
   dependsOn:
+    - name: infrastructure-crds
     - name: infrastructure-controllers
   sourceRef:
     kind: GitRepository
