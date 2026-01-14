@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - pv-sonarr-primary.yaml
   - pv-sonarr-backup.yaml
+  - pv-volsync-sonarr-config.yaml
