@@ -19,7 +19,7 @@ data:
     BACKUP_ROLE=${BACKUP_ROLE:-backup}
     VOLUME_NAME=${VOLUME_NAME:-sonarr-data}
     RSYNC_JOB_FILE=/tmp/rsync-job.yaml
-    RSYNC_TEMPLATE=/etc/volsync-failover/rsync-job.yaml
+    RSYNC_TEMPLATE=/tmp/scripts/rsync-job.yaml
 
     log() { echo "[failover] $(date -u +%FT%TZ) $*"; }
 
@@ -169,11 +169,11 @@ data:
       fi
       if [ "$consecutive" -ge "$THRESHOLD" ]; then
         log "Threshold exceeded; invoking failover (dry-run first)"
-        /etc/volsync-failover/failover.sh --promote --dry-run
+        /tmp/scripts/failover.sh --promote --dry-run
         # Second run with confirm only if the dry-run indicates OK and an env flag is set
         if [ "${AUTO_FAILOVER:-false}" = "true" ]; then
           log "AUTO_FAILOVER is true; executing confirm failover"
-          /etc/volsync-failover/failover.sh --promote --confirm
+          /tmp/scripts/failover.sh --promote --confirm
         fi
         # Cooldown to avoid flapping
         sleep "$COOLDOWN"
