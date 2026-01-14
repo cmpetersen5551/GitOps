@@ -4,8 +4,4 @@ kind: Kustomization
 resources:
   - crds-and-ns.yaml
   - rbac.yaml
-  - deployments.yaml
-  - config.yaml
-
-commonLabels:
-  app: metallb
+  - webhook-secret.yaml
