@@ -34,8 +34,12 @@ spec:
                 type: string
               bgpAdvertisements:
                 type: array
+                items:
+                  type: object
               communities:
                 type: array
+                items:
+                  type: string
           status:
             type: object
 ---
