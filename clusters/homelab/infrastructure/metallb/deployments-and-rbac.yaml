@@ -72,6 +72,11 @@ spec:
         image: quay.io/metallb/speaker:v0.13.10
         args:
         - --log-level=info
+        env:
+        - name: METALLB_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         ports:
         - containerPort: 7472
           name: metrics
