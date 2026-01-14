@@ -4,4 +4,5 @@ resources:
   - ./crds
   - ./controllers
   - ./metallb
+  - ./metallb-config
   - ./storage

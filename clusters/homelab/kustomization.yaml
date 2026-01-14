@@ -4,6 +4,7 @@ resources:
   - cluster/infrastructure-crds.yaml
   - cluster/infrastructure-controllers.yaml
   - cluster/infrastructure-metallb.yaml
+  - cluster/infrastructure-metallb-config.yaml
   - cluster/infrastructure-storage.yaml
   - cluster/apps-kustomization.yaml
   - cluster/operations-kustomization.yaml
