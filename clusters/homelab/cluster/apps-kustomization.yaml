@@ -12,7 +12,6 @@ spec:
   dependsOn:
     - name: infrastructure-storage
     - name: infrastructure-metallb
-    - name: operations
   sourceRef:
     kind: GitRepository
     name: flux-system
