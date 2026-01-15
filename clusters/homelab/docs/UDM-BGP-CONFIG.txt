@@ -19,10 +19,13 @@ neighbor 192.168.1.243 description k3s-cp1
 neighbor 192.168.1.243 route-map ALLOW-ALL in
 neighbor 192.168.1.243 route-map ALLOW-ALL out
 !
-address-family ipv4
+address-family ipv4 unicast
 neighbor 192.168.1.120 activate
 neighbor 192.168.1.29 activate
 neighbor 192.168.1.243 activate
+neighbor 192.168.1.120 soft-reconfiguration inbound
+neighbor 192.168.1.29 soft-reconfiguration inbound
+neighbor 192.168.1.243 soft-reconfiguration inbound
 exit-address-family
 !
 exit
