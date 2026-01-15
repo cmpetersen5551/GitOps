@@ -80,60 +80,45 @@ else
 fi
 
 echo "→ Step 6: Failover configuration validation"
-# Check if any deployment with backup PVC is missing from failover ConfigMap
-FAILOVER_CONFIG="clusters/homelab/operations/configmap.yaml"
-FAILOVER_SCRIPT="scripts/failover"
+# Check if any deployment with backup PVC is missing from failover.json
+FAILOVER_CONFIG="scripts/failover.json"
 MISSING_SERVICES=0
-UNMATCHED_SERVICES=0
 
 if [ -f "$FAILOVER_CONFIG" ]; then
   # Find all deployments that have backup PVCs (indicating HA setup)
   for APP_DIR in $(find clusters/homelab/apps -type d -mindepth 2 -maxdepth 2); do
     DEPLOYMENT_FILE="$APP_DIR/deployment.yaml"
     if [ -f "$DEPLOYMENT_FILE" ] && grep -q "pvc.*-backup" "$APP_DIR"/*.yaml; then
-      # This app has a backup PVC, so it should be in failover-api config
+      # This app has a backup PVC, so it should be in failover script config
       DEPLOYMENT_NAME=$(basename "$APP_DIR")
       NAMESPACE=$(dirname "$APP_DIR" | xargs basename)
       
-      # Check if this service is in the ConfigMap
-      if ! grep -q "^[[:space:]]*$DEPLOYMENT_NAME:" "$FAILOVER_CONFIG"; then
-        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not in failover ConfigMap"
-        echo "   Add the following to $FAILOVER_CONFIG under 'services:'"
-        echo "   $DEPLOYMENT_NAME:"
-        echo "     namespace: $NAMESPACE"
-        echo "     deployment: $DEPLOYMENT_NAME"
-        echo "     volume_name: <volume-name-from-deployment>"
-        echo "     primary_pvc: pvc-${DEPLOYMENT_NAME}"
-        echo "     backup_pvc: pvc-${DEPLOYMENT_NAME}-backup"
-        echo "     primary_node_label: primary"
-        echo "     backup_node_label: backup"
+      # Check if this service is in the JSON config
+      if ! grep -q "\"$DEPLOYMENT_NAME\"" "$FAILOVER_CONFIG"; then
+        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not in failover.json"
+        echo "   Add the following to $FAILOVER_CONFIG under 'services':"
+        echo "   \"$DEPLOYMENT_NAME\": {"
+        echo "     \"namespace\": \"$NAMESPACE\","
+        echo "     \"deployment\": \"$DEPLOYMENT_NAME\","
+        echo "     \"volume_name\": \"<volume-name-from-deployment>\","
+        echo "     \"primary_pvc\": \"pvc-${DEPLOYMENT_NAME}\","
+        echo "     \"backup_pvc\": \"pvc-${DEPLOYMENT_NAME}-backup\","
+        echo "     \"primary_node_label\": \"primary\","
+        echo "     \"backup_node_label\": \"backup\""
+        echo "   }"
         MISSING_SERVICES=$((MISSING_SERVICES + 1))
       fi
     fi
   done
   
   if [ "$MISSING_SERVICES" -gt 0 ]; then
-    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover ConfigMap"
+    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover.json"
     exit 1
   else
     echo "✓ All HA services configured in failover"
   fi
 else
-  echo "⚠ Failover ConfigMap not found (may be new repo)"
-fi
-
-# Verify failover script can find all configured services
-if [ -f "$FAILOVER_SCRIPT" ]; then
-  # Extract service names from ConfigMap
-  if [ -f "$FAILOVER_CONFIG" ]; then
-    CONFIGURED_SERVICES=$(grep -A 100 "services:" "$FAILOVER_CONFIG" | grep "^[[:space:]]*[a-z].*:" | grep -v "namespace:\|deployment:\|volume_name:\|pvc:\|node_label:" | awk '{print $1}' | tr -d ':' | sort)
-    
-    # Note: Script loads services dynamically from ConfigMap, so we just verify ConfigMap syntax is valid
-    if python3 "$FAILOVER_SCRIPT" 2>&1 | grep -q "Invalid config"; then
-      echo "✖ Failover script cannot read ConfigMap"
-      exit 1
-    fi
-  fi
+  echo "⚠ Failover config not found (may be new repo)"
 fi
 
 echo ""

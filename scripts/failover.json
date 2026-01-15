@@ -1,0 +1,13 @@
+{
+  "services": {
+    "sonarr": {
+      "namespace": "media",
+      "deployment": "sonarr",
+      "volume_name": "sonarr-data",
+      "primary_pvc": "pvc-sonarr",
+      "backup_pvc": "pvc-sonarr-backup",
+      "primary_node_label": "primary",
+      "backup_node_label": "backup"
+    }
+  }
+}

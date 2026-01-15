@@ -3,16 +3,19 @@
 GitOps Failover Script
 Automated failover/failback for HA services by editing Git manifests
 
-Non-interactive: Pass service and action as arguments
-Usage: ./scripts/failover <service> <promote|demote>
+Non-interactive: Pass action only (promote or demote)
+Usage: ./scripts/failover <promote|demote>
 
 Example:
-  ./scripts/failover sonarr promote      # Failover to backup
-  ./scripts/failover sonarr demote       # Failback to primary
+  ./scripts/failover promote      # Failover to backup
+  ./scripts/failover demote       # Failback to primary
+
+Services are configured in scripts/failover.json
 """
 
 import os
 import sys
+import json
 import subprocess
 import shutil
 from pathlib import Path
@@ -36,27 +39,19 @@ def log(msg: str, level: str = "info"):
         print(f"→ {msg}")
 
 def load_services_config() -> Dict:
-    """Load services configuration from ConfigMap YAML"""
-    config_path = Path(__file__).parent.parent / "clusters/homelab/operations/configmap.yaml"
+    """Load services configuration from JSON file"""
+    config_path = Path(__file__).parent / "failover.json"
     
     if not config_path.exists():
         log(f"Config file not found: {config_path}", "error")
         sys.exit(1)
     
     try:
-        import yaml
         with open(config_path, 'r') as f:
-            content = f.read()
-            start = content.find('services.yaml: |')
-            if start == -1:
-                log("Could not find 'services.yaml' section in ConfigMap", "error")
-                sys.exit(1)
-            services_yaml = content[start + len('services.yaml: |'):]
-            config = yaml.safe_load(services_yaml)
-    except ImportError:
-        log("PyYAML not installed, installing...", "warning")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyyaml', '--quiet'], check=False)
-        return load_services_config()
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        log(f"Invalid JSON in {config_path}: {e}", "error")
+        sys.exit(1)
     
     if not config or 'services' not in config:
         log("Invalid config: 'services' key not found", "error")
@@ -163,30 +158,32 @@ def git_commit_and_push(service: str, action: str) -> bool:
         return False
 
 def main():
-    # Parse arguments
-    if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <service> <promote|demote>", file=sys.stderr)
-        print(f"Example: {sys.argv[0]} sonarr promote", file=sys.stderr)
+    # Parse arguments - only action required
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <promote|demote>", file=sys.stderr)
+        print(f"Example: {sys.argv[0]} promote", file=sys.stderr)
         sys.exit(1)
     
-    service = sys.argv[1]
-    action = sys.argv[2]
+    action = sys.argv[1]
     
     if action not in ['promote', 'demote']:
         log(f"Invalid action: {action}. Must be 'promote' or 'demote'", "error")
         sys.exit(1)
     
-    log(f"Starting failover operation: {service} → {action}")
-    
     # Load configuration
     log("Loading services configuration...")
     services = load_services_config()
     
-    if service not in services:
-        log(f"Service '{service}' not found. Available: {', '.join(services.keys())}", "error")
+    # For now, failover the first service (in a real scenario, you might prompt or auto-detect)
+    # This is simple: script handles one configured service at a time
+    if len(services) == 0:
+        log("No services configured in failover.json", "error")
         sys.exit(1)
     
-    service_config = services[service]
+    service_name = list(services.keys())[0]
+    service_config = services[service_name]
+    
+    log(f"Starting failover operation: {service_name} → {action}")
     
     # Determine failover direction
     if action == "promote":
@@ -215,7 +212,7 @@ def main():
         sys.exit(1)
     
     # Commit and push
-    if not git_commit_and_push(service, action):
+    if not git_commit_and_push(service_name, action):
         log("Failed to commit and push", "error")
         sys.exit(1)
     

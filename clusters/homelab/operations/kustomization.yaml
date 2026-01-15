@@ -2,6 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
-  - configmap.yaml
 # Failover management is now handled by scripts/failover script
-# See scripts/failover for automated failover/failback operations
+# See scripts/failover and scripts/failover.json for configuration
