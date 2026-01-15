@@ -36,7 +36,7 @@ spec:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 1000m
+          image: linuxserver/prowlarr:version-2.3.0.5236
               memory: 512Mi
           livenessProbe:
             httpGet:
