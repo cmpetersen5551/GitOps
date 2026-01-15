@@ -3,6 +3,7 @@ route-map ALLOW-ALL permit 10
 !
 router bgp 65000
 bgp router-id 192.168.1.1
+no bgp ebgp-requires-policy
 !
 neighbor 192.168.1.120 remote-as 65001
 neighbor 192.168.1.120 description k3s-w1
