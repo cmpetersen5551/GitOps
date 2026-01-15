@@ -1,0 +1,33 @@
+# VolSync Syncthing ReplicationSource for Prowlarr primary node
+# This syncs pvc-prowlarr (primary) with pvc-prowlarr-backup (backup)
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: prowlarr-primary
+  namespace: media
+spec:
+  sourcePVC: pvc-prowlarr
+  syncthing:
+    serviceType: ClusterIP
+    # Will be populated with peer info once backup ReplicationSource is deployed
+    # peers:
+    # - ID: <backup-syncthing-id>
+    #   address: tcp://<backup-service-address>:22000
+    #   introducer: false
+---
+# VolSync Syncthing ReplicationSource for Prowlarr backup node
+# This is the peer that syncs with the primary
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: prowlarr-backup
+  namespace: media
+spec:
+  sourcePVC: pvc-prowlarr-backup
+  syncthing:
+    serviceType: ClusterIP
+    # Will be populated with peer info once primary ReplicationSource is deployed
+    # peers:
+    # - ID: <primary-syncthing-id>
+    #   address: tcp://<primary-service-address>:22000
+    #   introducer: false
