@@ -24,6 +24,7 @@ spec:
         image: quay.io/metallb/controller:v0.14.9
         args:
         - --log-level=info
+        - --cert-rotation=false
         ports:
         - containerPort: 7472
           name: metrics
