@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/name: traefik
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/instance: traefik-kube-system
     app.kubernetes.io/name: traefik
