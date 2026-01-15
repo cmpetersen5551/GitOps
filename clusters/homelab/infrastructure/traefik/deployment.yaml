@@ -44,8 +44,7 @@ spec:
         - "--api.debug=false"
         - "--providers.kubernetesIngress=true"
         - "--providers.kubernetesIngress.ingressClass=traefik"
-        - "--providers.kubernetesCRD=true"
-        - "--providers.kubernetesCRD.ingressClass=traefik"
+        - "--providers.kubernetesCRD=false"
         - "--log.level=INFO"
         - "--accesslog=false"
         livenessProbe:
