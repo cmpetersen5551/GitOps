@@ -25,7 +25,6 @@ spec:
         args:
         - --log-level=info
         - --webhook-mode=disabled
-        - --disable-cert-rotation=true
         ports:
         - containerPort: 7472
           name: metrics
