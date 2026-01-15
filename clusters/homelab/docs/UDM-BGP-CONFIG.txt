@@ -1,0 +1,35 @@
+! FRR BGP Configuration for UniFi Dream Machine
+! This file configures BGP to accept route advertisements from k3s cluster
+! 
+! To apply:
+! 1. Save this content
+! 2. SSH into UDM: ssh root@192.168.1.1
+! 3. Navigate to /etc/frr/
+! 4. Edit bgpd.conf with this content
+! 5. Restart FRR: systemctl restart frr
+
+!
+! BGP Configuration
+!
+router bgp 65000
+ bgp router-id 192.168.1.1
+ !
+ ! Define neighbors (k3s nodes)
+ neighbor 192.168.1.120 remote-as 65001
+ neighbor 192.168.1.120 description k3s-w1
+ !
+ neighbor 192.168.1.29 remote-as 65001
+ neighbor 192.168.1.29 description k3s-w2
+ !
+ neighbor 192.168.1.243 remote-as 65001
+ neighbor 192.168.1.243 description k3s-cp1
+ !
+ ! Accept routes from neighbors
+ address-family ipv4 unicast
+  neighbor 192.168.1.120 activate
+  neighbor 192.168.1.29 activate
+  neighbor 192.168.1.243 activate
+ exit-address-family
+!
+line vty
+!
