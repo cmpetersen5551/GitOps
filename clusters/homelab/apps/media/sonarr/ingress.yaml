@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: sonarr.local
+    - host: sonarr.homelab
       http:
         paths:
           - path: /
