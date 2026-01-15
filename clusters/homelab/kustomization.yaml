@@ -7,4 +7,3 @@ resources:
   - cluster/infrastructure-traefik.yaml
   - cluster/infrastructure-storage.yaml
   - cluster/apps-kustomization.yaml
-  - cluster/operations-kustomization.yaml

@@ -1,41 +1,50 @@
-# Failover Scripts
+# Scripts
 
-Simple, non-interactive failover/failback for HA services.
+Helper scripts for GitOps repository management.
 
-## Usage
+## Structure
+
+```
+scripts/
+├── validate              # Repository validation script
+├── .yamllint             # YAML linting configuration
+└── failover/             # HA failover/failback tooling
+    ├── failover          # Non-interactive failover script
+    ├── failover.json     # Service configuration
+    └── README.md         # Failover documentation
+```
+
+## validate
+
+Repository validation - run before committing:
 
 ```bash
-# Failover to backup node
-./scripts/failover promote
-
-# Failback to primary node  
-./scripts/failover demote
+scripts/validate
 ```
 
-## Configuration
+Checks:
+- ✓ Kustomize builds succeed
+- ✓ Kubernetes resources valid (dry-run)
+- ✓ YAML syntax (using .yamllint config)
+- ✓ No unresolved placeholders
+- ✓ PV/PVC storage capacity matches
+- ✓ All HA services in failover config
 
-Service definitions are in `scripts/failover.json`:
+**No shell extension** - following Unix convention for executable scripts.
 
-```json
-{
-  "services": {
-    "sonarr": {
-      "namespace": "media",
-      "deployment": "sonarr",
-      "volume_name": "sonarr-data",
-      "primary_pvc": "pvc-sonarr",
-      "backup_pvc": "pvc-sonarr-backup",
-      "primary_node_label": "primary",
-      "backup_node_label": "backup"
-    }
-  }
-}
+## failover
+
+Automated HA failover/failback by Git commits:
+
+```bash
+./scripts/failover/failover promote   # Failover to backup
+./scripts/failover/failover demote    # Failback to primary
 ```
 
-## How It Works
+See [failover/README.md](failover/README.md) for details.
 
-1. Script reads service config from `failover.json`
-2. Script edits the deployment manifest to switch PVC and node selector
-3. Changes are committed to Git
-4. Push triggers Flux reconciliation (within 1 minute)
-5. Deployment pod is scheduled on the new node with the new PVC
+## .yamllint
+
+YAML linting configuration - used by validate script.
+
+Move to scripts/ so it stays with the validation tool that uses it.
