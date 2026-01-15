@@ -40,7 +40,7 @@ spec:
         - "--entrypoints.https.address=:8443/tcp"
         - "--entrypoints.traefik.address=:9000/tcp"
         - "--api.dashboard=false"
-        - "--api.insecure=false"
+        - "--api.insecure=true"
         - "--api.debug=false"
         - "--providers.kubernetesIngress=true"
         - "--providers.kubernetesIngress.ingressClass=traefik"
@@ -52,19 +52,19 @@ spec:
             path: /ping
             port: traefik
             scheme: HTTP
-          initialDelaySeconds: 10
+          initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 3
+          failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /ping
             port: traefik
             scheme: HTTP
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 3
+          failureThreshold: 5
         resources:
           limits:
             cpu: 500m
