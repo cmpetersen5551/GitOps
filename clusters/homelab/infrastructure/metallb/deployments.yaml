@@ -77,6 +77,14 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: METALLB_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: METALLB_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: 7472
           name: metrics
