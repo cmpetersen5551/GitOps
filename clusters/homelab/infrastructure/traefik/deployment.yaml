@@ -19,6 +19,8 @@ spec:
         app.kubernetes.io/name: traefik
     spec:
       serviceAccountName: traefik
+      nodeSelector:
+        kubernetes.io/hostname: k3s-w1
       containers:
       - name: traefik
         image: traefik:v3.0.1
