@@ -4,5 +4,7 @@ kind: Kustomization
 namespace: kube-system
 
 resources:
+  - rbac.yaml
+  - deployment.yaml
   - ingressclass.yaml
   - service.yaml
