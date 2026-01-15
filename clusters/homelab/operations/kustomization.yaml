@@ -2,5 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
-  # TODO: Re-enable failover-api once Docker image is built and available
-  # - ./failover-api
+  # Failover management is now handled by scripts/failover script
+  # See scripts/failover.sh for interactive failover/failback operations

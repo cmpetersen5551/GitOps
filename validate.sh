@@ -79,10 +79,12 @@ else
   echo "✓ All static PV/PVC capacities match"
 fi
 
-echo "→ Step 6: Failover-API configuration validation"
+echo "→ Step 6: Failover configuration validation"
 # Check if any deployment with backup PVC is missing from failover-api ConfigMap
 FAILOVER_CONFIG="clusters/homelab/operations/failover-api/configmap.yaml"
+FAILOVER_SCRIPT="scripts/failover"
 MISSING_SERVICES=0
+UNMATCHED_SERVICES=0
 
 if [ -f "$FAILOVER_CONFIG" ]; then
   # Find all deployments that have backup PVCs (indicating HA setup)
@@ -95,7 +97,7 @@ if [ -f "$FAILOVER_CONFIG" ]; then
       
       # Check if this service is in the ConfigMap
       if ! grep -q "^[[:space:]]*$DEPLOYMENT_NAME:" "$FAILOVER_CONFIG"; then
-        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not configured in failover-api ConfigMap"
+        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not configured in failover ConfigMap"
         echo "   Add the following to $FAILOVER_CONFIG under 'services:'"
         echo "   $DEPLOYMENT_NAME:"
         echo "     namespace: $NAMESPACE"
@@ -111,13 +113,27 @@ if [ -f "$FAILOVER_CONFIG" ]; then
   done
   
   if [ "$MISSING_SERVICES" -gt 0 ]; then
-    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover-api ConfigMap"
+    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover ConfigMap"
     exit 1
   else
-    echo "✓ All HA services configured in failover-api"
+    echo "✓ All HA services configured in failover"
   fi
 else
-  echo "⚠ Failover-API ConfigMap not found (may be new repo)"
+  echo "⚠ Failover ConfigMap not found (may be new repo)"
+fi
+
+# Verify failover script can find all configured services
+if [ -f "$FAILOVER_SCRIPT" ]; then
+  # Extract service names from ConfigMap
+  if [ -f "$FAILOVER_CONFIG" ]; then
+    CONFIGURED_SERVICES=$(grep -A 100 "services:" "$FAILOVER_CONFIG" | grep "^[[:space:]]*[a-z].*:" | grep -v "namespace:\|deployment:\|volume_name:\|pvc:\|node_label:" | awk '{print $1}' | tr -d ':' | sort)
+    
+    # Note: Script loads services dynamically from ConfigMap, so we just verify ConfigMap syntax is valid
+    if python3 "$FAILOVER_SCRIPT" 2>&1 | grep -q "Invalid config"; then
+      echo "✖ Failover script cannot read ConfigMap"
+      exit 1
+    fi
+  fi
 fi
 
 echo ""
