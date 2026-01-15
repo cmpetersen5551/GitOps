@@ -54,6 +54,9 @@ rules:
 - apiGroups: [""]
   resources: ["endpoints"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "list", "watch"]
@@ -67,7 +70,7 @@ rules:
   resources: ["secrets"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["metallb.io"]
-  resources: ["addresspools", "ipaddresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles"]
+  resources: ["addresspools", "ipaddresspools", "l2advertisements", "bgpadvertisements", "communities", "bgppeers", "bfdprofiles", "servicel2statuses"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
