@@ -95,3 +95,27 @@ subjects:
 - kind: ServiceAccount
   name: speaker
   namespace: metallb-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metallb-speaker-pod-reader
+  namespace: metallb-system
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metallb-speaker-pod-reader
+  namespace: metallb-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metallb-speaker-pod-reader
+subjects:
+- kind: ServiceAccount
+  name: speaker
+  namespace: metallb-system
