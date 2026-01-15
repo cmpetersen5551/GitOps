@@ -1,10 +1,10 @@
-! Minimal BGP configuration for UDM/UniFi
-! This config assumes FRR/zebra is properly running and connected
+! BGP configuration for UDM/UniFi
+! Fixed: Added address-family with neighbor activation
 !
 router bgp 65000
  bgp router-id 192.168.1.1
  !
- ! k3s cluster neighbors
+ ! Define k3s cluster neighbors
  neighbor 192.168.1.120 remote-as 65001
  neighbor 192.168.1.120 description k3s-w1
  neighbor 192.168.1.29 remote-as 65001
@@ -12,15 +12,11 @@ router bgp 65000
  neighbor 192.168.1.243 remote-as 65001
  neighbor 192.168.1.243 description k3s-cp1
  !
+ ! CRITICAL: Must activate neighbors within address-family
  address-family ipv4 unicast
-  ! Activate neighbors for IPv4
   neighbor 192.168.1.120 activate
   neighbor 192.168.1.29 activate
   neighbor 192.168.1.243 activate
-  !
-  ! Optional: announce connected routes to BGP peers
-  ! Remove this if you don't want UDM to announce its own networks
-  ! redistribute connected
  exit-address-family
 !
 line vty
