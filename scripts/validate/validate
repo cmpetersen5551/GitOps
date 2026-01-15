@@ -34,7 +34,7 @@ echo "→ Step 3: YAML syntax check"
 if command -v yamllint &> /dev/null; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if ! yamllint -c "$SCRIPT_DIR/.yamllint" clusters/homelab/ > /dev/null 2>&1; then
-    echo "✖ YAML syntax check failed. Run 'yamllint -c scripts/.yamllint clusters/homelab/' to see errors."
+    echo "✖ YAML syntax check failed. Run 'yamllint -c scripts/validate/.yamllint clusters/homelab/' to see errors."
     exit 1
   fi
   echo "✓ YAML syntax valid"
