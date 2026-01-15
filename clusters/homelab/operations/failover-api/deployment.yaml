@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: failover-api
+  namespace: operations
+  labels:
+    app: failover-api
+spec:
+  replicas: 2  # HA: run on both worker nodes
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Ensure availability during updates
+  selector:
+    matchLabels:
+      app: failover-api
+  template:
+    metadata:
+      labels:
+        app: failover-api
+      annotations:
+        prometheus.io/scrape: "false"  # No metrics endpoint yet
+    spec:
+      serviceAccountName: failover-api
+      # Pod anti-affinity: spread replicas across nodes for HA
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - failover-api
+                topologyKey: kubernetes.io/hostname
+      # Tolerations for node taints (if any)
+      tolerations:
+        - key: "role"
+          operator: "Equal"
+          value: "primary"
+          effect: "NoSchedule"
+        - key: "role"
+          operator: "Equal"
+          value: "backup"
+          effect: "NoSchedule"
+      containers:
+        - name: failover-api
+          image: failover-api:latest  # Replace with your registry
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: FLASK_ENV
+              value: "production"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          # Security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          # Probes
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15  # Increased to allow startup validation
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3  # Increased tolerance for slow startup
+          # Resource limits
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          # Volume mounts
+          volumeMounts:
+            - name: config
+              mountPath: /etc/failover-api
+              readOnly: true
+            - name: ssh-key
+              mountPath: /run/secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      # Volumes
+      volumes:
+        - name: config
+          configMap:
+            name: failover-api-config
+        - name: ssh-key
+          secret:
+            secretName: flux-system
+            items:
+              - key: identity
+                path: ssh-identity
+                mode: 0400
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi

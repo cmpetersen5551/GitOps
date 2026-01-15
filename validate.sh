@@ -79,6 +79,47 @@ else
   echo "✓ All static PV/PVC capacities match"
 fi
 
+echo "→ Step 6: Failover-API configuration validation"
+# Check if any deployment with backup PVC is missing from failover-api ConfigMap
+FAILOVER_CONFIG="clusters/homelab/operations/failover-api/configmap.yaml"
+MISSING_SERVICES=0
+
+if [ -f "$FAILOVER_CONFIG" ]; then
+  # Find all deployments that have backup PVCs (indicating HA setup)
+  for APP_DIR in $(find clusters/homelab/apps -type d -mindepth 2 -maxdepth 2); do
+    DEPLOYMENT_FILE="$APP_DIR/deployment.yaml"
+    if [ -f "$DEPLOYMENT_FILE" ] && grep -q "pvc.*-backup" "$APP_DIR"/*.yaml; then
+      # This app has a backup PVC, so it should be in failover-api config
+      DEPLOYMENT_NAME=$(basename "$APP_DIR")
+      NAMESPACE=$(dirname "$APP_DIR" | xargs basename)
+      
+      # Check if this service is in the ConfigMap
+      if ! grep -q "^[[:space:]]*$DEPLOYMENT_NAME:" "$FAILOVER_CONFIG"; then
+        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not configured in failover-api ConfigMap"
+        echo "   Add the following to $FAILOVER_CONFIG under 'services:'"
+        echo "   $DEPLOYMENT_NAME:"
+        echo "     namespace: $NAMESPACE"
+        echo "     deployment: $DEPLOYMENT_NAME"
+        echo "     volume_name: <volume-name-from-deployment>"
+        echo "     primary_pvc: pvc-${DEPLOYMENT_NAME}"
+        echo "     backup_pvc: pvc-${DEPLOYMENT_NAME}-backup"
+        echo "     primary_node_label: primary"
+        echo "     backup_node_label: backup"
+        MISSING_SERVICES=$((MISSING_SERVICES + 1))
+      fi
+    fi
+  done
+  
+  if [ "$MISSING_SERVICES" -gt 0 ]; then
+    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover-api ConfigMap"
+    exit 1
+  else
+    echo "✓ All HA services configured in failover-api"
+  fi
+else
+  echo "⚠ Failover-API ConfigMap not found (may be new repo)"
+fi
+
 echo ""
 echo "=== All validation checks passed ==="
 echo "Repository is ready to commit"

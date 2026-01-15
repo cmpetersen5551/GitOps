@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: failover-api-config
+  namespace: operations
+data:
+  services.yaml: |
+    # Failover configuration for all services
+    # Add entries here when deploying new services with HA requirements
+    services:
+      sonarr:
+        namespace: media
+        deployment: sonarr
+        volume_name: sonarr-data
+        primary_pvc: pvc-sonarr
+        backup_pvc: pvc-sonarr-backup
+        primary_node_label: primary
+        backup_node_label: backup
+      # Example for future services:
+      # radarr:
+      #   namespace: media
+      #   deployment: radarr
+      #   volume_name: radarr-data
+      #   primary_pvc: pvc-radarr
+      #   backup_pvc: pvc-radarr-backup
+      #   primary_node_label: primary
+      #   backup_node_label: backup
