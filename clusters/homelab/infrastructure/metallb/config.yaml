@@ -8,18 +8,9 @@ spec:
   - 192.168.1.50-192.168.1.98
 ---
 apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: default
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-  - default
----
-apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement
 metadata:
-  name: default-bgp
+  name: default
   namespace: metallb-system
 spec:
   ipAddressPools:
@@ -33,4 +24,4 @@ metadata:
 spec:
   myASN: 65001
   peerASN: 65000
-  peerAddress: 192.168.1.1
+  peerAddress: 192.168.1.1:179
