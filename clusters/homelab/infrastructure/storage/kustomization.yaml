@@ -4,3 +4,6 @@ resources:
   - pv-sonarr-primary.yaml
   - pv-sonarr-backup.yaml
   - pv-volsync-sonarr-config.yaml
+  - pv-prowlarr-primary.yaml
+  - pv-prowlarr-backup.yaml
+  - pv-volsync-prowlarr-config.yaml
