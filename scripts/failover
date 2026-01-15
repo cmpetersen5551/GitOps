@@ -1,59 +1,52 @@
 #!/usr/bin/env python3
 """
 GitOps Failover Script
-Triggers failover/failback for HA services by editing Git manifests
-No external dependencies - works with standard library + PyYAML (if installed)
-Falls back to sed if PyYAML not available
+Automated failover/failback for HA services by editing Git manifests
+
+Non-interactive: Pass service and action as arguments
+Usage: ./scripts/failover <service> <promote|demote>
+
+Example:
+  ./scripts/failover sonarr promote      # Failover to backup
+  ./scripts/failover sonarr demote       # Failback to primary
 """
 
 import os
 import sys
-import json
 import subprocess
-import tempfile
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-# Colors for output
 class Colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
     OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
     FAIL = '\033[91m'
+    WARNING = '\033[93m'
     ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
 
 def log(msg: str, level: str = "info"):
     """Log messages with color coding"""
     if level == "error":
-        print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}")
+        print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}", file=sys.stderr)
     elif level == "success":
         print(f"{Colors.OKGREEN}✓ {msg}{Colors.ENDC}")
     elif level == "warning":
         print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
-    elif level == "header":
-        print(f"{Colors.BOLD}{Colors.HEADER}{msg}{Colors.ENDC}")
     else:
-        print(f"{Colors.OKCYAN}→ {msg}{Colors.ENDC}")
+        print(f"→ {msg}")
 
 def load_services_config() -> Dict:
     """Load services configuration from ConfigMap YAML"""
-    config_path = Path(__file__).parent.parent / "clusters/homelab/operations/failover-api/configmap.yaml"
+    config_path = Path(__file__).parent.parent / "clusters/homelab/operations/configmap.yaml"
     
     if not config_path.exists():
         log(f"Config file not found: {config_path}", "error")
         sys.exit(1)
     
     try:
-        # Try importing PyYAML for proper parsing
         import yaml
         with open(config_path, 'r') as f:
             content = f.read()
-            # Extract the services.yaml data section
             start = content.find('services.yaml: |')
             if start == -1:
                 log("Could not find 'services.yaml' section in ConfigMap", "error")
@@ -61,52 +54,15 @@ def load_services_config() -> Dict:
             services_yaml = content[start + len('services.yaml: |'):]
             config = yaml.safe_load(services_yaml)
     except ImportError:
-        # Fallback to manual parsing
-        log("PyYAML not installed, using fallback parser", "warning")
-        config = _parse_yaml_fallback(config_path)
+        log("PyYAML not installed, installing...", "warning")
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyyaml', '--quiet'], check=False)
+        return load_services_config()
     
     if not config or 'services' not in config:
         log("Invalid config: 'services' key not found", "error")
         sys.exit(1)
     
     return config['services']
-
-def _parse_yaml_fallback(config_path: Path) -> Dict:
-    """Fallback YAML parser for when PyYAML is not available"""
-    services = {}
-    current_service = None
-    
-    with open(config_path, 'r') as f:
-        in_services = False
-        for line in f:
-            line = line.rstrip()
-            
-            if 'services:' in line:
-                in_services = True
-                continue
-            
-            if not in_services or not line.strip():
-                continue
-            
-            # Service name (no leading spaces, ends with colon)
-            if line and line[0] not in ' #':
-                continue
-            
-            # Check if this is a service entry (2-space indent, not starting with #)
-            if line.startswith('  ') and not line.startswith('    ') and not line.strip().startswith('#'):
-                service_name = line.strip().rstrip(':')
-                if service_name:
-                    current_service = service_name
-                    services[current_service] = {}
-            
-            # Service properties (4-space indent)
-            elif line.startswith('    ') and ':' in line and current_service:
-                parts = line.strip().split(':', 1)
-                key = parts[0].strip()
-                value = parts[1].strip()
-                services[current_service][key] = value
-    
-    return {'services': services}
 
 def get_deployment_path(service_config: Dict) -> str:
     """Generate deployment file path from config"""
@@ -117,12 +73,9 @@ def get_deployment_path(service_config: Dict) -> str:
 def edit_with_yq(file_path: str, volume_name: str, new_pvc: str, new_role: str) -> bool:
     """Edit YAML file using yq (if available)"""
     try:
-        # Check if yq is available
         subprocess.run(['which', 'yq'], check=True, capture_output=True)
         
-        # Edit volume
         cmd1 = f"yq -i '.spec.template.spec.volumes[] | select(.name == \"{volume_name}\").persistentVolumeClaim.claimName = \"{new_pvc}\"' {file_path}"
-        # Edit nodeSelector
         cmd2 = f"yq -i '.spec.template.spec.nodeSelector.role = \"{new_role}\"' {file_path}"
         
         subprocess.run(cmd1, shell=True, check=True, capture_output=True)
@@ -132,28 +85,24 @@ def edit_with_yq(file_path: str, volume_name: str, new_pvc: str, new_role: str) 
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
-def edit_with_sed(file_path: str, volume_name: str, old_pvc: str, new_pvc: str, new_role: str) -> bool:
+def edit_with_sed(file_path: str, old_pvc: str, new_pvc: str, new_role: str) -> bool:
     """Edit YAML file using sed (fallback)"""
     try:
-        # Create backup
         backup_path = f"{file_path}.bak"
         shutil.copy(file_path, backup_path)
         
-        # Replace PVC claim
-        cmd1 = f"sed -i.bak 's/claimName: {old_pvc}/claimName: {new_pvc}/' {file_path}"
-        # Replace role
-        cmd2 = f"sed -i.bak 's/role: [a-z]*/role: {new_role}/' {file_path}"
+        # Use safer sed approach with delimiters
+        cmd1 = f"sed -i.bak 's|claimName: {old_pvc}|claimName: {new_pvc}|' {file_path}"
+        cmd2 = f"sed -i.bak 's|role: [a-z]*|role: {new_role}|' {file_path}"
         
         subprocess.run(cmd1, shell=True, check=True)
         subprocess.run(cmd2, shell=True, check=True)
         
-        # Remove backup
         if Path(f"{file_path}.bak").exists():
             os.remove(f"{file_path}.bak")
         
         return True
     except subprocess.CalledProcessError:
-        # Restore backup on failure
         if Path(backup_path).exists():
             shutil.copy(backup_path, file_path)
             os.remove(backup_path)
@@ -174,15 +123,11 @@ def edit_deployment(
         return False
     
     log(f"Editing: {file_path}")
-    log(f"  Volume: {volume_name}")
-    log(f"  PVC: {old_pvc} → {new_pvc}")
-    log(f"  Role: primary → {new_role}")
     
-    # Try yq first (more reliable), fall back to sed
     if not edit_with_yq(str(file_abs), volume_name, new_pvc, new_role):
-        log("yq not available, using sed", "warning")
-        if not edit_with_sed(str(file_abs), volume_name, old_pvc, new_pvc, new_role):
-            log("Failed to edit deployment with sed", "error")
+        log("Using sed for YAML edit", "warning")
+        if not edit_with_sed(str(file_abs), old_pvc, new_pvc, new_role):
+            log("Failed to edit deployment", "error")
             return False
     
     return True
@@ -192,7 +137,6 @@ def git_commit_and_push(service: str, action: str) -> bool:
     repo_root = Path(__file__).parent.parent
     
     try:
-        # Change to repo root
         os.chdir(repo_root)
         
         log("Staging changes...")
@@ -218,94 +162,49 @@ def git_commit_and_push(service: str, action: str) -> bool:
         log(f"Git operation failed: {e}", "error")
         return False
 
-def confirm_action(service: str, action: str, config: Dict) -> bool:
-    """Get user confirmation before making changes"""
-    log(f"\n{Colors.BOLD}Action Summary:{Colors.ENDC}")
-    log(f"  Service: {service}")
-    log(f"  Action: {action} (failover to backup)" if action == "promote" else f"  Action: {action} (failback to primary)")
-    log(f"  File: {get_deployment_path(config)}")
-    log(f"  Namespace: {config.get('namespace')}")
-    log(f"  Deployment: {config.get('deployment')}")
-    
-    while True:
-        response = input(f"\n{Colors.BOLD}Proceed? (yes/no): {Colors.ENDC}").strip().lower()
-        if response in ['yes', 'y']:
-            return True
-        elif response in ['no', 'n']:
-            return False
-        else:
-            log("Please enter 'yes' or 'no'", "warning")
-
 def main():
-    log("="*60, "header")
-    log("GitOps Failover Script", "header")
-    log("="*60, "header")
+    # Parse arguments
+    if len(sys.argv) < 3:
+        print(f"Usage: {sys.argv[0]} <service> <promote|demote>", file=sys.stderr)
+        print(f"Example: {sys.argv[0]} sonarr promote", file=sys.stderr)
+        sys.exit(1)
+    
+    service = sys.argv[1]
+    action = sys.argv[2]
+    
+    if action not in ['promote', 'demote']:
+        log(f"Invalid action: {action}. Must be 'promote' or 'demote'", "error")
+        sys.exit(1)
+    
+    log(f"Starting failover operation: {service} → {action}")
     
     # Load configuration
     log("Loading services configuration...")
     services = load_services_config()
     
-    if not services:
-        log("No services configured", "error")
+    if service not in services:
+        log(f"Service '{service}' not found. Available: {', '.join(services.keys())}", "error")
         sys.exit(1)
-    
-    log(f"Found {len(services)} service(s): {', '.join(services.keys())}", "success")
-    
-    # Interactive menu
-    log("\nSelect action:")
-    service_list = list(services.keys())
-    
-    for i, svc in enumerate(service_list, 1):
-        print(f"  {i}. {svc}")
-    
-    while True:
-        try:
-            choice = int(input(f"\nEnter service number (1-{len(service_list)}): "))
-            if 1 <= choice <= len(service_list):
-                service = service_list[choice - 1]
-                break
-            else:
-                log(f"Please enter a number between 1 and {len(service_list)}", "warning")
-        except ValueError:
-            log("Invalid input", "warning")
-    
-    log(f"\nSelected service: {service}")
-    
-    # Choose action
-    log("\nSelect action:")
-    print("  1. Promote (failover to backup)")
-    print("  2. Demote (failback to primary)")
-    
-    while True:
-        try:
-            action_choice = int(input("\nEnter action number (1-2): "))
-            if action_choice == 1:
-                action = "promote"
-                break
-            elif action_choice == 2:
-                action = "demote"
-                break
-            else:
-                log("Please enter 1 or 2", "warning")
-        except ValueError:
-            log("Invalid input", "warning")
     
     service_config = services[service]
     
-    # Get configuration details
+    # Determine failover direction
     if action == "promote":
         source_pvc = service_config.get('primary_pvc')
         target_pvc = service_config.get('backup_pvc')
         target_role = service_config.get('backup_node_label')
-    else:
+        source_node = service_config.get('primary_node_label')
+        target_node = service_config.get('backup_node_label')
+    else:  # demote
         source_pvc = service_config.get('backup_pvc')
         target_pvc = service_config.get('primary_pvc')
         target_role = service_config.get('primary_node_label')
+        source_node = service_config.get('backup_node_label')
+        target_node = service_config.get('primary_node_label')
     
-    # Get confirmation
-    if not confirm_action(service, action, service_config):
-        log("Cancelled by user", "warning")
-        sys.exit(0)
+    log(f"Service: {service} (namespace: {service_config.get('namespace')})")
+    log(f"Failover: {source_node} → {target_node}")
+    log(f"PVC: {source_pvc} → {target_pvc}")
     
     # Edit deployment
     deployment_path = get_deployment_path(service_config)
@@ -320,21 +219,15 @@ def main():
         log("Failed to commit and push", "error")
         sys.exit(1)
     
-    log("\n" + "="*60, "header")
-    log("Failover triggered successfully!", "success")
-    log("="*60, "header")
-    log("\nNext steps:")
-    log("1. Flux will detect the change within 1 minute (check 'flux get kustomizations')")
-    log("2. Pod will be rescheduled to the target node")
-    log("3. Service should become available on the target node")
-    log("\nYou can monitor pod status with:")
-    log(f"  kubectl get pods -n {service_config.get('namespace')} -o wide --watch")
+    log("✓ Failover triggered successfully!", "success")
+    log("Flux will reconcile within 1 minute")
+    log(f"Monitor with: kubectl get pods -n {service_config.get('namespace')} -o wide --watch")
 
 if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        log("\n\nInterrupted by user", "warning")
+        log("\nInterrupted by user", "warning")
         sys.exit(0)
     except Exception as e:
         log(f"Unexpected error: {e}", "error")
