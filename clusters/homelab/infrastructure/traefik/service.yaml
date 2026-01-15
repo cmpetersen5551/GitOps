@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/instance: traefik-kube-system
     app.kubernetes.io/name: traefik
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app.kubernetes.io/instance: traefik-kube-system
     app.kubernetes.io/name: traefik
@@ -16,9 +16,7 @@ spec:
       port: 80
       protocol: TCP
       targetPort: 8000
-      nodePort: 30080
     - name: https
       port: 443
       protocol: TCP
       targetPort: 8443
-      nodePort: 30443

@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/instance: traefik-kube-system
     app.kubernetes.io/name: traefik
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/instance: traefik-kube-system
@@ -19,8 +19,18 @@ spec:
         app.kubernetes.io/name: traefik
     spec:
       serviceAccountName: traefik
-      nodeSelector:
-        kubernetes.io/hostname: k3s-w1
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - traefik
+              topologyKey: kubernetes.io/hostname
       containers:
       - name: traefik
         image: traefik:v3.0.1
