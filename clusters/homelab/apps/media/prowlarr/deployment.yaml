@@ -19,7 +19,7 @@ spec:
         role: primary
       containers:
         - name: prowlarr
-          image: linuxserver/prowlarr:latest
+          image: linuxserver/prowlarr:2.3.2.5245
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9696
