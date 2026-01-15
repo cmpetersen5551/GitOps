@@ -16,7 +16,7 @@ spec:
   ipAddressPools:
   - default
 ---
-apiVersion: metallb.io/v1beta2
+apiVersion: metallb.io/v1beta1
 kind: BGPPeer
 metadata:
   name: udm-router
