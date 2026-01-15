@@ -8,9 +8,18 @@ spec:
   - 192.168.1.50-192.168.1.98
 ---
 apiVersion: metallb.io/v1beta1
-kind: BGPAdvertisement
+kind: L2Advertisement
 metadata:
   name: default
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - default
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: default-bgp
   namespace: metallb-system
 spec:
   ipAddressPools:
