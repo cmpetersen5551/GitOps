@@ -24,4 +24,5 @@ metadata:
 spec:
   myASN: 65001
   peerASN: 65000
-  peerAddress: 192.168.1.1:179
+  peerAddress: 192.168.1.1
+  peerPort: 179
