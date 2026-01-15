@@ -73,7 +73,7 @@ spec:
             httpGet:
               path: /api/health
               port: http
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -81,10 +81,10 @@ spec:
             httpGet:
               path: /api/health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 15  # Increased to allow startup validation
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 2
+            failureThreshold: 3  # Increased tolerance for slow startup
           # Resource limits
           resources:
             requests:

@@ -30,6 +30,7 @@ app = Flask(__name__)
 
 # Global config (loaded on startup)
 SERVICES_CONFIG: Dict = {}
+STARTUP_COMPLETE = False  # Track if startup validation passed
 GIT_REPO_URL = "ssh://git@github.com/cmpetersen5551/GitOps"
 REPO_PATH = "/tmp/gitops-failover"
 SSH_KEY_PATH = "/run/secrets/ssh-identity"
@@ -38,22 +39,77 @@ GIT_EMAIL = "failover-api@cluster.local"
 
 
 def load_services_config() -> bool:
-    """Load services configuration from ConfigMap"""
+    """Load services configuration from ConfigMap with validation"""
     try:
         config_path = Path("/etc/failover-api/services.yaml")
         if not config_path.exists():
             logger.error(f"Config file not found: {config_path}")
+            logger.error("ConfigMap may not be mounted. Check volume mounts in deployment.")
             return False
         
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
+        if not config or 'services' not in config:
+            logger.error("Invalid config: 'services' key not found")
+            return False
+        
         global SERVICES_CONFIG
         SERVICES_CONFIG = config.get('services', {})
-        logger.info(f"Loaded configuration for {len(SERVICES_CONFIG)} services: {list(SERVICES_CONFIG.keys())}")
+        
+        if not SERVICES_CONFIG:
+            logger.warning("No services configured (services dict is empty)")
+        else:
+            logger.info(f"Loaded configuration for {len(SERVICES_CONFIG)} services: {list(SERVICES_CONFIG.keys())}")
+        
         return True
     except Exception as e:
         logger.error(f"Failed to load services config: {e}")
+        return False
+
+
+def validate_ssh_key() -> bool:
+    """Validate SSH key exists and has correct permissions"""
+    try:
+        ssh_path = Path(SSH_KEY_PATH)
+        
+        if not ssh_path.exists():
+            logger.error(f"SSH key not found: {SSH_KEY_PATH}")
+            logger.error("Check that flux-system secret is mounted correctly")
+            return False
+        
+        # Check permissions (should be 0400)
+        mode = ssh_path.stat().st_mode & 0o777
+        if mode != 0o400:
+            logger.warning(f"SSH key has incorrect permissions: {oct(mode)} (expected 0o400)")
+            logger.warning("Attempting to fix permissions...")
+            ssh_path.chmod(0o400)
+        
+        logger.info("SSH key validation passed")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to validate SSH key: {e}")
+        return False
+
+
+def validate_tmp_directory() -> bool:
+    """Validate temp directory is writable"""
+    try:
+        tmp_path = Path(REPO_PATH).parent
+        if not tmp_path.exists():
+            tmp_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created temp directory: {tmp_path}")
+        
+        # Test write permissions
+        test_file = tmp_path / ".write_test"
+        test_file.write_text("test")
+        test_file.unlink()
+        
+        logger.info("Temp directory validation passed")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to validate temp directory: {e}")
+        logger.error("Ensure /tmp is writable and has sufficient space")
         return False
 
 
@@ -234,6 +290,13 @@ def perform_failover(
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint"""
+    if not STARTUP_COMPLETE:
+        return jsonify({
+            'status': 'starting',
+            'message': 'Startup validation in progress',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+        }), 503  # Service Unavailable until startup complete
+    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat() + 'Z',
@@ -348,15 +411,44 @@ def internal_error(error):
 
 
 def main():
-    """Application entry point"""
-    # Load configuration
-    if not load_services_config():
-        logger.error("Failed to load services configuration")
+    """Application entry point with startup validation"""
+    global STARTUP_COMPLETE
+    
+    logger.info("="*60)
+    logger.info("Failover API Starting - Performing Startup Validation")
+    logger.info("="*60)
+    
+    # Validate dependencies
+    checks = [
+        ("ConfigMap", load_services_config),
+        ("SSH Key", validate_ssh_key),
+        ("Temp Directory", validate_tmp_directory),
+    ]
+    
+    all_valid = True
+    for check_name, check_func in checks:
+        logger.info(f"Validating {check_name}...")
+        if check_func():
+            logger.info(f"✓ {check_name} validation passed")
+        else:
+            logger.error(f"✗ {check_name} validation FAILED")
+            all_valid = False
+    
+    if not all_valid:
+        logger.error("="*60)
+        logger.error("Startup validation failed. Fix errors above and restart pod.")
+        logger.error("="*60)
         sys.exit(1)
     
-    logger.info("Failover API starting")
+    logger.info("="*60)
+    logger.info("All startup validations passed")
     logger.info(f"Git repository: {GIT_REPO_URL}")
-    logger.info(f"Services configured: {list(SERVICES_CONFIG.keys())}")
+    logger.info(f"Services configured: {list(SERVICES_CONFIG.keys()) if SERVICES_CONFIG else 'NONE'}")
+    logger.info("Failover API ready to serve requests")
+    logger.info("="*60)
+    
+    # Mark startup as complete (health check will now return 200)
+    STARTUP_COMPLETE = True
     
     # Run Flask app
     app.run(
