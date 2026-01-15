@@ -15,21 +15,19 @@ metadata:
 spec:
   ipAddressPools:
   - default
-  aggregationLength: 32  # Advertise /32 (individual IPs)
-  localPref: 100
 ---
 apiVersion: metallb.io/v1beta2
 kind: BGPPeer
 metadata:
-  name: udm-router
+  name: udm-router-primary
   namespace: metallb-system
 spec:
-  myASN: 65001        # Cluster ASN (matches your UDM config)
-  peerASN: 65000      # Router ASN (UDM)
-  peerAddress: 192.168.1.1  # Your UDM IP
+  myASN: 65001
+  peerASN: 65000
+  peerAddress: 192.168.1.1
   nodeSelectors:
   - matchLabels:
-      role: primary   # Peer from k3s-w1
+      role: primary
 ---
 apiVersion: metallb.io/v1beta2
 kind: BGPPeer
@@ -42,4 +40,4 @@ spec:
   peerAddress: 192.168.1.1
   nodeSelectors:
   - matchLabels:
-      role: backup    # Peer from k3s-w2
+      role: backup
