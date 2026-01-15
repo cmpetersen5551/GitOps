@@ -19,25 +19,9 @@ spec:
 apiVersion: metallb.io/v1beta2
 kind: BGPPeer
 metadata:
-  name: udm-router-primary
+  name: udm-router
   namespace: metallb-system
 spec:
   myASN: 65001
   peerASN: 65000
   peerAddress: 192.168.1.1
-  nodeSelectors:
-  - matchLabels:
-      role: primary
----
-apiVersion: metallb.io/v1beta2
-kind: BGPPeer
-metadata:
-  name: udm-router-backup
-  namespace: metallb-system
-spec:
-  myASN: 65001
-  peerASN: 65000
-  peerAddress: 192.168.1.1
-  nodeSelectors:
-  - matchLabels:
-      role: backup
