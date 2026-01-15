@@ -24,12 +24,11 @@ spec:
         image: quay.io/metallb/controller:v0.14.9
         args:
         - --log-level=info
-        - --cert-rotation=false
+        - --webhook-mode=disabled
+        - --disable-cert-rotation=true
         ports:
         - containerPort: 7472
           name: metrics
-        - containerPort: 9443
-          name: webhook
         resources:
           limits:
             cpu: 100m
@@ -43,24 +42,6 @@ spec:
           capabilities:
             drop:
             - ALL
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: metallb-webhook
-  namespace: metallb-system
-  labels:
-    app: metallb
-    component: controller
-spec:
-  ports:
-  - name: webhook
-    port: 443
-    targetPort: 9443
-    protocol: TCP
-  selector:
-    app: metallb
-    component: controller
 ---
 apiVersion: apps/v1
 kind: DaemonSet
