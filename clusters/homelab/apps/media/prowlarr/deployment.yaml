@@ -16,7 +16,7 @@ spec:
         app: prowlarr
     spec:
       nodeSelector:
-        role: backup
+        role: primary
       containers:
         - name: prowlarr
           image: linuxserver/prowlarr@sha256:a82e6d95e0f41ec2383cdbfe89b35384b16bde22eebc8201b98bd9778c2e2062
@@ -67,4 +67,4 @@ spec:
       volumes:
         - name: prowlarr-data
           persistentVolumeClaim:
-            claimName: pvc-prowlarr-backup-backup
+            claimName: pvc-prowlarr
