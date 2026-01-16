@@ -127,32 +127,42 @@ def edit_deployment(
     
     return True
 
-def git_commit_and_push(service: str, action: str) -> bool:
-    """Commit and push changes to Git"""
+def git_commit_and_push(services: list, action: str) -> bool:
+    """Commit and push changes to Git for multiple services."""
     repo_root = Path(__file__).resolve().parent.parent.parent
-    
+
     try:
         os.chdir(repo_root)
-        
+
         log("Staging changes...")
         subprocess.run(['git', 'add', '-A'], check=True, capture_output=True)
-        
+
         action_desc = "failover to backup" if action == "promote" else "failback to primary"
-        commit_msg = f"failover: {service} - {action_desc}"
-        
+        svc_list = ','.join(services)
+        commit_msg = f"failover: {svc_list} - {action_desc}"
+
         log(f"Committing: {commit_msg}")
-        subprocess.run(['git', 'commit', '-m', commit_msg], check=True, capture_output=True)
-        
+        # If there are no changes, git commit will exit non-zero; capture that case
+        commit = subprocess.run(['git', 'commit', '-m', commit_msg], capture_output=True, text=True)
+        if commit.returncode != 0:
+            # No changes to commit is not fatal if message indicates nothing changed
+            if 'nothing to commit' in commit.stderr.lower() or 'nothing to commit' in commit.stdout.lower():
+                log("No changes to commit", "warning")
+                return True
+            else:
+                log(f"Commit failed: {commit.stderr or commit.stdout}", "error")
+                return False
+
         log("Pushing to GitHub...")
         result = subprocess.run(['git', 'push'], capture_output=True, text=True)
-        
+
         if result.returncode != 0:
             log(f"Push failed: {result.stderr}", "error")
             return False
-        
+
         log("Changes pushed successfully", "success")
         return True
-    
+
     except subprocess.CalledProcessError as e:
         log(f"Git operation failed: {e}", "error")
         return False
@@ -174,51 +184,79 @@ def main():
     log("Loading services configuration...")
     services = load_services_config()
     
-    # For now, failover the first service (in a real scenario, you might prompt or auto-detect)
-    # This is simple: script handles one configured service at a time
+    # Decide which services to operate on: specific service or all
     if len(services) == 0:
         log("No services configured in failover.json", "error")
         sys.exit(1)
-    
-    service_name = list(services.keys())[0]
-    service_config = services[service_name]
-    
-    log(f"Starting failover operation: {service_name} → {action}")
-    
-    # Determine failover direction
-    if action == "promote":
-        source_pvc = service_config.get('primary_pvc')
-        target_pvc = service_config.get('backup_pvc')
-        target_role = service_config.get('backup_node_label')
-        source_node = service_config.get('primary_node_label')
-        target_node = service_config.get('backup_node_label')
-    else:  # demote
-        source_pvc = service_config.get('backup_pvc')
-        target_pvc = service_config.get('primary_pvc')
-        target_role = service_config.get('primary_node_label')
-        source_node = service_config.get('backup_node_label')
-        target_node = service_config.get('primary_node_label')
-    
-    log(f"Service: {service_name} (namespace: {service_config.get('namespace')})")
-    log(f"Failover: {source_node} → {target_node}")
-    log(f"PVC: {source_pvc} → {target_pvc}")
-    
-    # Edit deployment
-    deployment_path = get_deployment_path(service_config)
-    volume_name = service_config.get('volume_name')
-    
-    if not edit_deployment(deployment_path, volume_name, source_pvc, target_pvc, target_role):
-        log("Failed to edit deployment", "error")
+
+    service_arg: Optional[str] = None
+    if len(sys.argv) >= 3:
+        service_arg = sys.argv[2]
+
+    if service_arg:
+        if service_arg == 'all':
+            target_services = list(services.keys())
+        elif service_arg in services:
+            target_services = [service_arg]
+        else:
+            log(f"Unknown service: {service_arg}", "error")
+            sys.exit(1)
+    else:
+        # default to all services
+        target_services = list(services.keys())
+
+    log(f"Starting failover operation: {','.join(target_services)} → {action}")
+
+    succeeded = []
+    failed = []
+
+    for svc in target_services:
+        service_config = services[svc]
+
+        # Determine failover direction per-service
+        if action == "promote":
+            source_pvc = service_config.get('primary_pvc')
+            target_pvc = service_config.get('backup_pvc')
+            target_role = service_config.get('backup_node_label')
+            source_node = service_config.get('primary_node_label')
+            target_node = service_config.get('backup_node_label')
+        else:  # demote
+            source_pvc = service_config.get('backup_pvc')
+            target_pvc = service_config.get('primary_pvc')
+            target_role = service_config.get('primary_node_label')
+            source_node = service_config.get('backup_node_label')
+            target_node = service_config.get('primary_node_label')
+
+        log(f"Service: {svc} (namespace: {service_config.get('namespace')})")
+        log(f"Failover: {source_node} → {target_node}")
+        log(f"PVC: {source_pvc} → {target_pvc}")
+
+        # Edit deployment
+        deployment_path = get_deployment_path(service_config)
+        volume_name = service_config.get('volume_name')
+
+        if edit_deployment(deployment_path, volume_name, source_pvc, target_pvc, target_role):
+            succeeded.append(svc)
+        else:
+            failed.append(svc)
+
+    if len(succeeded) == 0:
+        log("No services were successfully edited; aborting commit", "error")
+        if failed:
+            log(f"Failed services: {','.join(failed)}", "error")
         sys.exit(1)
-    
-    # Commit and push
-    if not git_commit_and_push(service_name, action):
+
+    # Commit and push successes together
+    if not git_commit_and_push(succeeded, action):
         log("Failed to commit and push", "error")
         sys.exit(1)
-    
+
     log("✓ Failover triggered successfully!", "success")
     log("Flux will reconcile within 1 minute")
-    log(f"Monitor with: kubectl get pods -n {service_config.get('namespace')} -o wide --watch")
+    # show namespaces for succeeded services (unique namespaces)
+    namespaces = sorted(set(services[s].get('namespace') for s in succeeded))
+    for ns in namespaces:
+        log(f"Monitor with: kubectl get pods -n {ns} -o wide --watch")
 
 if __name__ == '__main__':
     try:
