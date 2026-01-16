@@ -111,7 +111,7 @@ def edit_deployment(
     new_role: str
 ) -> bool:
     """Edit deployment manifest with new PVC and role"""
-    file_abs = Path(__file__).parent.parent / file_path
+    file_abs = Path(__file__).resolve().parent.parent.parent / file_path
     
     if not file_abs.exists():
         log(f"Deployment not found: {file_abs}", "error")
@@ -129,7 +129,7 @@ def edit_deployment(
 
 def git_commit_and_push(service: str, action: str) -> bool:
     """Commit and push changes to Git"""
-    repo_root = Path(__file__).parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     
     try:
         os.chdir(repo_root)
@@ -199,7 +199,7 @@ def main():
         source_node = service_config.get('backup_node_label')
         target_node = service_config.get('primary_node_label')
     
-    log(f"Service: {service} (namespace: {service_config.get('namespace')})")
+    log(f"Service: {service_name} (namespace: {service_config.get('namespace')})")
     log(f"Failover: {source_node} → {target_node}")
     log(f"PVC: {source_pvc} → {target_pvc}")
     
