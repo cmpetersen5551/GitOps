@@ -67,4 +67,4 @@ spec:
       volumes:
         - name: prowlarr-data
           persistentVolumeClaim:
-            claimName: pvc-prowlarr-backup
+            claimName: pvc-prowlarr-backup-backup
