@@ -16,7 +16,7 @@ spec:
         app: sonarr
     spec:
       nodeSelector:
-        role: backup
+        role: primary
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
@@ -68,4 +68,4 @@ spec:
       volumes:
         - name: sonarr-data
           persistentVolumeClaim:
-            claimName: pvc-sonarr-backup
+            claimName: pvc-sonarr
