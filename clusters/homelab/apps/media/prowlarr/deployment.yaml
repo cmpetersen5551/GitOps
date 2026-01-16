@@ -57,8 +57,8 @@ spec:
             httpGet:
               path: /
               port: 9696
-            initialDelaySeconds: 0
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
           volumeMounts:
