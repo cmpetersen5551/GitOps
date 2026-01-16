@@ -19,7 +19,7 @@ spec:
         role: primary
       containers:
         - name: prowlarr
-          image: linuxserver/prowlarr:2.3.2.5245
+          image: linuxserver/prowlarr@sha256:a82e6d95e0f41ec2383cdbfe89b35384b16bde22eebc8201b98bd9778c2e2062
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9696
@@ -36,7 +36,6 @@ spec:
               cpu: 100m
               memory: 256Mi
             limits:
-          image: linuxserver/prowlarr:version-2.3.0.5236
               memory: 512Mi
           livenessProbe:
             httpGet:
