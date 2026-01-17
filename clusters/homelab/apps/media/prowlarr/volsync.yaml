@@ -13,6 +13,12 @@ spec:
     - ID: 6LGG2UT-Q4JWQC4-DMIJNHV-C5R3B2A-NLPYAUA-GYTHKIG-FCYQMBU-TYVHMAT
       address: tcp://10.43.220.252:22000
       introducer: false
+    moverSecurityContext:
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
 ---
 # VolSync Syncthing ReplicationSource for Prowlarr backup node
 # This is the peer that syncs with the primary
@@ -29,3 +35,9 @@ spec:
     - ID: ZLIWZ56-PT2PBY3-PP37XID-XEIUD6U-AR7DUMM-UJFKDSC-77XLUQ4-XAXBEQN
       address: tcp://10.43.119.34:22000
       introducer: false
+    moverSecurityContext:
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
