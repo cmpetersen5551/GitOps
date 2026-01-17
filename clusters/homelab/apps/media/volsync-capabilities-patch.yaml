@@ -1,0 +1,70 @@
+# Kustomize Strategic Merge Patch to add Linux capabilities to VolSync mover containers
+# This allows Syncthing to manage file permissions on hostPath volumes
+# See: https://github.com/backube/volsync/issues/...
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-prowlarr-primary
+  namespace: media
+spec:
+  template:
+    spec:
+      containers:
+      - name: syncthing
+        securityContext:
+          capabilities:
+            add:
+              - CHOWN
+              - FOWNER
+              - DAC_OVERRIDE
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-prowlarr-backup
+  namespace: media
+spec:
+  template:
+    spec:
+      containers:
+      - name: syncthing
+        securityContext:
+          capabilities:
+            add:
+              - CHOWN
+              - FOWNER
+              - DAC_OVERRIDE
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-sonarr-primary
+  namespace: media
+spec:
+  template:
+    spec:
+      containers:
+      - name: syncthing
+        securityContext:
+          capabilities:
+            add:
+              - CHOWN
+              - FOWNER
+              - DAC_OVERRIDE
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volsync-sonarr-backup
+  namespace: media
+spec:
+  template:
+    spec:
+      containers:
+      - name: syncthing
+        securityContext:
+          capabilities:
+            add:
+              - CHOWN
+              - FOWNER
+              - DAC_OVERRIDE

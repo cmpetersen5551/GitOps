@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# This overlay patches VolSync mover Deployments to add Linux capabilities
+# needed for Syncthing to manage file permissions on hostPath volumes
+
+bases:
+  - ../
+
+patchesJson6902:
+  # Prowlarr primary
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: volsync-prowlarr-primary
+      namespace: media
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/securityContext/capabilities/add
+        value: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+
+  # Prowlarr backup
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: volsync-prowlarr-backup
+      namespace: media
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/securityContext/capabilities/add
+        value: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+
+  # Sonarr primary
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: volsync-sonarr-primary
+      namespace: media
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/securityContext/capabilities/add
+        value: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+
+  # Sonarr backup
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: volsync-sonarr-backup
+      namespace: media
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/securityContext/capabilities/add
+        value: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
