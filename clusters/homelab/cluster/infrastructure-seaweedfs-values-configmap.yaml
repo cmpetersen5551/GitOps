@@ -28,7 +28,7 @@ data:
     volume:
       enabled: true
       replicas: 2
-      nodeSelector:
+      nodeSelector: |-
         sw-volume: "true"
       dataDirs:
         - name: data
