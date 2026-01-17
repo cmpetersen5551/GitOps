@@ -1,0 +1,100 @@
+# CronJob to patch VolSync syncthing mover Deployments with necessary Linux capabilities
+# For k3s (non-OpenShift): VolSync's privileged-movers annotation requires OpenShift SCCs,
+# so we use this CronJob to apply the required capabilities to syncthing containers.
+# Required capabilities: CHOWN (change ownership), FOWNER (set perms), DAC_OVERRIDE (bypass access control)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: volsync-mover-capabilities
+  namespace: media
+spec:
+  schedule: "*/5 * * * *"  # Run every 5 minutes to ensure compliance
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: volsync-mover-patcher
+        spec:
+          serviceAccountName: volsync-mover-patcher
+          containers:
+          - name: patcher
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              # Deployments to patch
+              DEPLOYMENTS=(
+                "volsync-prowlarr-primary"
+                "volsync-prowlarr-backup"
+                "volsync-sonarr-primary"
+                "volsync-sonarr-backup"
+              )
+
+              for deployment in "${DEPLOYMENTS[@]}"; do
+                if ! kubectl get deployment "$deployment" -n media &>/dev/null; then
+                  continue
+                fi
+
+                # Check if already patched
+                current_caps=$(kubectl get deployment "$deployment" -n media \
+                  -o jsonpath='{.spec.template.spec.containers[0].securityContext.capabilities.add[0]}' 2>/dev/null || echo "")
+
+                if [ "$current_caps" = "CHOWN" ]; then
+                  # Already patched
+                  continue
+                fi
+
+                # Apply the patch
+                echo "Patching $deployment..."
+                kubectl patch deployment "$deployment" -n media --type='json' -p='[
+                  {
+                    "op": "add",
+                    "path": "/spec/template/spec/containers/0/securityContext/capabilities/add",
+                    "value": ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+                  }
+                ]' 2>/dev/null || {
+                  echo "Failed to patch $deployment (may not exist yet)"
+                }
+              done
+
+              echo "Patch cycle complete"
+          restartPolicy: Never
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: volsync-mover-patcher
+  namespace: media
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: volsync-mover-patcher
+  namespace: media
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "patch"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: volsync-mover-patcher
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: volsync-mover-patcher
+subjects:
+- kind: ServiceAccount
+  name: volsync-mover-patcher

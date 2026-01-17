@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - ./sonarr
   - ./prowlarr
+  - volsync-mover-capabilities-cronjob.yaml
