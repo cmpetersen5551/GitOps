@@ -6,10 +6,12 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "false"
 provisioner: seaweedfs-csi-driver
 parameters:
-  # These parameters are passed to the CSI driver
-  mounter: "fuse"  # Use FUSE mount for performance
-  volumeType: "file"
-  replication: "1"  # Number of copies to maintain
+  # 010: 1 replica on different rack (matches topology.kubernetes.io/rack labels)
+  replication: "010"
+  # Base path for buckets in filer - apps write to /buckets/<pvc-name>
+  path: /buckets
+  # Disk type preference (hdd or ssd)
+  diskType: "hdd"
 allowVolumeExpansion: true
 reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer  # Topology-aware provisioning
+volumeBindingMode: Immediate
