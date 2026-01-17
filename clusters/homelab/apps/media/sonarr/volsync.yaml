@@ -9,11 +9,10 @@ spec:
   sourcePVC: pvc-sonarr
   syncthing:
     serviceType: ClusterIP
-    # Will be populated with peer info once backup ReplicationSource is deployed
-    # peers:
-    # - ID: <backup-syncthing-id>
-    #   address: tcp://<backup-service-address>:22000
-    #   introducer: false
+    peers:
+    - ID: BIK4775-O4DG3X7-N7GB7U7-XKXVWIT-RLBFZYA-O2GFGBQ-RPA3Q2P-A25WNQR
+      address: tcp://10.43.163.112:22000
+      introducer: false
 ---
 # VolSync Syncthing ReplicationSource for Sonarr backup node
 # This is the peer that syncs with the primary
@@ -26,8 +25,7 @@ spec:
   sourcePVC: pvc-sonarr-backup
   syncthing:
     serviceType: ClusterIP
-    # Will be populated with peer info once primary ReplicationSource is deployed
-    # peers:
-    # - ID: <primary-syncthing-id>
-    #   address: tcp://<primary-service-address>:22000
-    #   introducer: false
+    peers:
+    - ID: FRLLMNU-EOC2JSF-PMB5KWD-JCYA5DA-RN5MKP4-YPKEFMO-6XWFGNN-6AMJLAS
+      address: tcp://10.43.76.239:22000
+      introducer: false

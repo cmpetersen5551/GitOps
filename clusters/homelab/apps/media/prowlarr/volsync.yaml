@@ -9,11 +9,10 @@ spec:
   sourcePVC: pvc-prowlarr
   syncthing:
     serviceType: ClusterIP
-    # Will be populated with peer info once backup ReplicationSource is deployed
-    # peers:
-    # - ID: <backup-syncthing-id>
-    #   address: tcp://<backup-service-address>:22000
-    #   introducer: false
+    peers:
+    - ID: 6LGG2UT-Q4JWQC4-DMIJNHV-C5R3B2A-NLPYAUA-GYTHKIG-FCYQMBU-TYVHMAT
+      address: tcp://10.43.220.252:22000
+      introducer: false
 ---
 # VolSync Syncthing ReplicationSource for Prowlarr backup node
 # This is the peer that syncs with the primary
@@ -26,8 +25,7 @@ spec:
   sourcePVC: pvc-prowlarr-backup
   syncthing:
     serviceType: ClusterIP
-    # Will be populated with peer info once primary ReplicationSource is deployed
-    # peers:
-    # - ID: <primary-syncthing-id>
-    #   address: tcp://<primary-service-address>:22000
-    #   introducer: false
+    peers:
+    - ID: ZLIWZ56-PT2PBY3-PP37XID-XEIUD6U-AR7DUMM-UJFKDSC-77XLUQ4-XAXBEQN
+      address: tcp://10.43.119.34:22000
+      introducer: false
