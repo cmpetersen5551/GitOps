@@ -10,7 +10,6 @@ spec:
   wait: true
   timeout: 3m
   dependsOn:
-    - name: infrastructure-storage
     - name: infrastructure-metallb
   sourceRef:
     kind: GitRepository

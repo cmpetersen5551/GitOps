@@ -83,7 +83,7 @@ All stateful apps follow this pattern:
 
 **Run validation:**
 ```bash
-./validate.sh
+./scripts/validate/validate
 ```
 
 This checks:
@@ -129,7 +129,7 @@ flux diff kustomization <name> --path=clusters/homelab/<path>
 
 1. **No secrets in Git** - Use Flux secrets management for sensitive data
 2. **No manual kubectl apply** - All changes via Git commits
-3. **Validate before commit** - Run `./validate.sh` always
+3. **Validate before commit** - Run `./scripts/validate/validate` always
 4. **Keep single source of truth** - Never duplicate resource definitions
 5. **Respect dependency chains** - Don't break Flux `dependsOn` order
 6. **Test in non-prod first** - Use dry-run validation before applying to cluster
@@ -144,7 +144,7 @@ flux diff kustomization <name> --path=clusters/homelab/<path>
 ## AI Agent Notes
 
 This repository is structured for autonomous modification by AI agents:
-- Validation script (`./validate.sh`) confirms changes are syntactically valid
+- Validation script (`./scripts/validate/validate`) confirms changes are syntactically valid
 - Dependency chains ensure proper reconciliation order
 - Single source of truth prevents conflicts
 - Clear folder structure and naming conventions
@@ -153,7 +153,7 @@ This repository is structured for autonomous modification by AI agents:
 1. Understand current structure (read this file + relevant docs)
 2. Plan changes respecting dependency chains
 3. Make changes to Git files
-4. Run `./validate.sh` - must pass before proceeding
+4. Run `./scripts/validate/validate` - must pass before proceeding
 5. Commit only after validation passes
 
 **Do not:**

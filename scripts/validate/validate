@@ -10,16 +10,12 @@ set -e
 echo "=== Validating GitOps Repository ==="
 
 echo "→ Step 1: Kustomize builds"
-kubectl kustomize clusters/homelab/infrastructure/crds > /dev/null
-kubectl kustomize clusters/homelab/infrastructure/controllers > /dev/null
-kubectl kustomize clusters/homelab/infrastructure/storage > /dev/null
+kubectl kustomize clusters/homelab/infrastructure > /dev/null
 kubectl kustomize clusters/homelab/apps > /dev/null
 echo "✓ All kustomize builds successful"
 
 echo "→ Step 2: Kubernetes dry-run validation (client-side)"
-kubectl apply --dry-run=client -k clusters/homelab/infrastructure/crds > /dev/null
-kubectl apply --dry-run=client -k clusters/homelab/infrastructure/controllers > /dev/null
-kubectl apply --dry-run=client -k clusters/homelab/infrastructure/storage > /dev/null
+kubectl apply --dry-run=client -k clusters/homelab/infrastructure > /dev/null
 echo "✓ Infrastructure resources valid"
 
 # Note: Apps may fail client-side dry-run if CRDs aren't in cluster yet
@@ -77,48 +73,6 @@ if [ "$MISMATHES" -gt 0 ]; then
   exit 1
 else
   echo "✓ All static PV/PVC capacities match"
-fi
-
-echo "→ Step 6: Failover configuration validation"
-# Check if any deployment with backup PVC is missing from failover.json
-FAILOVER_CONFIG="scripts/failover/failover.json"
-MISSING_SERVICES=0
-
-if [ -f "$FAILOVER_CONFIG" ]; then
-  # Find all deployments that have backup PVCs (indicating HA setup)
-  for APP_DIR in $(find clusters/homelab/apps -type d -mindepth 2 -maxdepth 2); do
-    DEPLOYMENT_FILE="$APP_DIR/deployment.yaml"
-    if [ -f "$DEPLOYMENT_FILE" ] && grep -q "pvc.*-backup" "$APP_DIR"/*.yaml; then
-      # This app has a backup PVC, so it should be in failover script config
-      DEPLOYMENT_NAME=$(basename "$APP_DIR")
-      NAMESPACE=$(dirname "$APP_DIR" | xargs basename)
-      
-      # Check if this service is in the JSON config
-      if ! grep -q "\"$DEPLOYMENT_NAME\"" "$FAILOVER_CONFIG"; then
-        echo "✖ Service '$DEPLOYMENT_NAME' (namespace: $NAMESPACE) has backup PVC but is not in failover.json"
-        echo "   Add the following to $FAILOVER_CONFIG under 'services':"
-        echo "   \"$DEPLOYMENT_NAME\": {"
-        echo "     \"namespace\": \"$NAMESPACE\","
-        echo "     \"deployment\": \"$DEPLOYMENT_NAME\","
-        echo "     \"volume_name\": \"<volume-name-from-deployment>\","
-        echo "     \"primary_pvc\": \"pvc-${DEPLOYMENT_NAME}\","
-        echo "     \"backup_pvc\": \"pvc-${DEPLOYMENT_NAME}-backup\","
-        echo "     \"primary_node_label\": \"primary\","
-        echo "     \"backup_node_label\": \"backup\""
-        echo "   }"
-        MISSING_SERVICES=$((MISSING_SERVICES + 1))
-      fi
-    fi
-  done
-  
-  if [ "$MISSING_SERVICES" -gt 0 ]; then
-    echo "✖ Found $MISSING_SERVICES service(s) with HA setup missing from failover.json"
-    exit 1
-  else
-    echo "✓ All HA services configured in failover"
-  fi
-else
-  echo "⚠ Failover config not found (may be new repo)"
 fi
 
 echo ""

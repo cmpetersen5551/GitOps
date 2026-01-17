@@ -9,9 +9,6 @@ spec:
   prune: true
   wait: true
   timeout: 5m
-  dependsOn:
-    - name: infrastructure-crds
-    - name: infrastructure-controllers
   sourceRef:
     kind: GitRepository
     name: flux-system
