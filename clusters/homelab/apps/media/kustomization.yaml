@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - ./sonarr
   - ./prowlarr
+  - patch-mover-cronjob.yaml

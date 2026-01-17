@@ -1,0 +1,108 @@
+# CronJob to ensure VolSync mover Deployments have necessary Linux capabilities
+# This runs every 5 minutes to check and patch mover containers
+# Needed because volsync drops ALL capabilities but Syncthing needs CHOWN, FOWNER, DAC_OVERRIDE
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: patch-volsync-movers
+  namespace: media
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: patch-volsync-movers
+          containers:
+          - name: patcher
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              # Function to patch a Deployment
+              patch_deployment() {
+                local deployment=$1
+                local namespace=$2
+
+                # Check if Deployment exists
+                if ! kubectl get deployment "$deployment" -n "$namespace" 2>/dev/null | grep -q "$deployment"; then
+                  return
+                fi
+
+                # Check if syncthing container already has capabilities
+                local current_caps=$(kubectl get deployment "$deployment" -n "$namespace" -o jsonpath='{.spec.template.spec.containers[0].securityContext.capabilities.add}' 2>/dev/null || echo "")
+
+                if echo "$current_caps" | grep -q "CHOWN"; then
+                  # Already patched
+                  return
+                fi
+
+                # Patch the deployment to add capabilities
+                kubectl patch deployment "$deployment" -n "$namespace" --type='json' -p='[
+                  {
+                    "op": "replace",
+                    "path": "/spec/template/spec/containers/0/securityContext/capabilities",
+                    "value": {
+                      "add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
+                      "drop": []
+                    }
+                  }
+                ]' 2>/dev/null || {
+                  # If replace fails, try add
+                  kubectl patch deployment "$deployment" -n "$namespace" --type='json' -p='[
+                    {
+                      "op": "add",
+                      "path": "/spec/template/spec/containers/0/securityContext/capabilities",
+                      "value": {
+                        "add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
+                        "drop": []
+                      }
+                    }
+                  ]' 2>/dev/null || true
+                }
+              }
+
+              # Patch all volsync mover deployments in the media namespace
+              for deployment in volsync-prowlarr-primary volsync-prowlarr-backup volsync-sonarr-primary volsync-sonarr-backup; do
+                patch_deployment "$deployment" "media"
+              done
+          restartPolicy: Never
+---
+# ServiceAccount for the patch CronJob
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: patch-volsync-movers
+  namespace: media
+---
+# Role for the patch CronJob
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: patch-volsync-movers
+  namespace: media
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/status"]
+  verbs: ["get", "patch"]
+---
+# RoleBinding for the patch CronJob
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: patch-volsync-movers
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: patch-volsync-movers
+subjects:
+- kind: ServiceAccount
+  name: patch-volsync-movers
+  namespace: media
