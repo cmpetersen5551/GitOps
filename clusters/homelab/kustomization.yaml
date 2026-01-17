@@ -6,5 +6,6 @@ resources:
   - cluster/infrastructure-seaweedfs-helmrelease.yaml
   - cluster/infrastructure-seaweedfs-values-configmap.yaml
   - cluster/infrastructure-seaweedfs-kustomization.yaml
+  - cluster/infrastructure-seaweedfs-csi-kustomization.yaml
   - cluster/infrastructure-traefik.yaml
   - cluster/apps-kustomization.yaml
