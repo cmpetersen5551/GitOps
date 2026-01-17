@@ -199,6 +199,22 @@ syncthing:
 
 These are **minimal and necessary** for Syncthing to sync file permissions between nodes. All other capabilities are dropped for security.
 
+**k3s Implementation Note:**
+On k3s (non-OpenShift), VolSync's `privileged-movers` annotation cannot be used because it requires OpenShift SecurityContextConstraints. Instead, a Kubernetes CronJob (`volsync-mover-capabilities-cronjob.yaml`) runs every minute to patch the VolSync syncthing mover Deployments with the required capabilities.
+
+This CronJob:
+- Checks each mover Deployment (prowlarr-primary, prowlarr-backup, sonarr-primary, sonarr-backup)
+- Applies JSON patch to add CHOWN, FOWNER, DAC_OVERRIDE to container securityContext
+- Drops only NET_RAW (preserves normal security posture)
+- Runs frequently to compensate for VolSync controller reconciliation
+
+If Syncthing pods show `permission denied` errors in logs, verify the CronJob is running:
+```bash
+kubectl get cronjobs -n media
+kubectl get jobs -n media | grep volsync-mover-capabilities
+kubectl logs -n media $(kubectl get pods -n media -l app=volsync-mover-patcher -o name | head -1) --tail=20
+```
+
 ## Monitoring & Health Checks
 
 ### Cluster Health
