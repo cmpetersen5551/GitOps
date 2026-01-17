@@ -1,0 +1,80 @@
+## SeaweedFS Helm values tailored for this homelab
+## Source of truth - ConfigMap in Flux namespace mirrors this for HelmRelease
+## Topology: 3 masters (k3s-cp1, k3s-w1, k3s-w2) + 2 volume servers (k3s-w1, k3s-w2)
+## Node labels required:
+##   - topology.kubernetes.io/rack=rack-{1,2}  (on k3s-w1, k3s-w2)
+##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
+
+global:
+  replicationPlacement: "010"  # 1 replica on different rack
+
+master:
+  enabled: true
+  replicas: 3
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: "local-path-provisioner"
+  data:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweed_master
+
+volume:
+  enabled: true
+  replicas: 2
+  # REQUIRED: Volume servers must run only on nodes with sw-volume=true label
+  nodeSelector:
+    sw-volume: "true"
+  # Keep empty to use chart's default pod anti-affinity
+  affinity: ""
+  dataDirs:
+    - name: data
+      type: hostPath
+      hostPathPrefix: /data/seaweed
+      maxVolumes: 100
+
+filer:
+  enabled: true
+  replicas: 1  # Start with 1 filer using LevelDB; upgrade to 2+ with MySQL backend
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: "local-path-provisioner"
+  data:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweed_filer
+  # Disable MySQL by default for LevelDB mode
+  extraEnvironmentVars:
+    WEED_MYSQL_ENABLED: "false"
+
+csi:
+  driver:
+    enabled: true
+  controller:
+    replicas: 1
+  node:
+    enabled: true
+
+# Conservative resource limits for homelab; adjust for your nodes
+resources:
+  master:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  filer:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  volume:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi

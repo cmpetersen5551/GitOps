@@ -362,12 +362,12 @@ parameters:
 ```
 
 **Metadata backends (choose one):**
-- **MySQL/Postgres** - Production recommended (HA via database cluster)
+- **LevelDB** - Embedded, simple, good for single/dual filer setup (RECOMMENDED for initial deployment)
+- **MySQL/Postgres** - Production-grade, supports HA via database cluster (upgrade option)
 - **Redis** - Fast, requires Redis HA setup
-- **LevelDB** - Embedded, supports multi-filer with sync (limitations apply)
 - **CockroachDB, TiDB** - Distributed SQL (overkill for homelab)
 
-**For your use case:** MySQL (you already have it for Flux, can reuse).
+**For your use case (initial):** LevelDB - no external database needed, simpler to validate SeaweedFS first. Can migrate to MySQL later if concurrent filer access becomes an issue.
 
 #### CSI Driver Operation
 **When you create a PVC:**
@@ -474,12 +474,31 @@ kubectl get nodes --show-labels | grep rack
 chown -R 1000:1000 /mnt/user/appdata/seaweedfs
 ```
 
-### 3.3 Database Setup (MySQL for Filer)
+### 3.3 Filer Metadata Backend Setup
 
-**Option 1: Use Existing MySQL (Recommended)**
-If you already have MySQL for another purpose, reuse it.
+**Option 1: LevelDB (Recommended for Initial Deployment)**
+Use embedded LevelDB with a single filer:
+```yaml
+# No external database setup needed
+filer:
+  enabled: true
+  replicas: 1  # Start with 1 filer for simplicity
+  # LevelDB is default, no config needed
+```
+**Pros:**
+- Zero external dependencies
+- Simple to deploy and validate
+- Good enough for media workloads (low concurrent metadata access)
 
-**Option 2: Deploy MySQL in Kubernetes**
+**Cons:**
+- Single filer only (no HA filer)
+- Limited to ~1000 files/sec metadata operations
+
+**When to upgrade:** If you add more services with high concurrent file operations (databases, caching layers), upgrade to MySQL.
+
+**Option 2: Deploy MySQL in Kubernetes (Future Upgrade)**
+If performance becomes an issue, deploy MySQL:
+
 ```yaml
 # infrastructure/mysql/mysql-statefulset.yaml
 apiVersion: apps/v1
@@ -532,6 +551,8 @@ GRANT ALL PRIVILEGES ON seaweedfs_filer.* TO 'seaweedfs'@'%';
 FLUSH PRIVILEGES;
 ```
 
+**Enable in SeaweedFS Helm values** (see below).
+
 ### 3.4 Helm Chart Deployment
 
 **1. Add Helm repository:**
@@ -543,6 +564,8 @@ helm repo update
 **2. Create `values.yaml`:**
 ```yaml
 # clusters/homelab/infrastructure/seaweedfs/values.yaml
+# NOTE: Start with LevelDB (default). Upgrade to MySQL later if needed.
+
 global:
   replicationPlacment: "010"  # Different rack replication
 
@@ -580,23 +603,27 @@ volume:
 
 filer:
   enabled: true
-  replicas: 2  # HA filers
+  replicas: 1  # Start with 1 filer (LevelDB default)
   s3:
     enabled: true  # Optional S3 API
     port: 8333
-  extraEnvironmentVars:
-    # MySQL backend
-    WEED_MYSQL_ENABLED: "true"
-    WEED_MYSQL_HOSTNAME: mysql.seaweedfs.svc.cluster.local
-    WEED_MYSQL_PORT: "3306"
-    WEED_MYSQL_DATABASE: seaweedfs_filer
-    WEED_MYSQL_USERNAME: seaweedfs
-    WEED_MYSQL_PASSWORD: your-password  # Use Sealed Secret!
-    WEED_MYSQL_CONNECTION_MAX_IDLE: "5"
-    WEED_MYSQL_CONNECTION_MAX_OPEN: "75"
-    WEED_MYSQL_CONNECTION_MAX_LIFETIME_SECONDS: "0"
+  # For initial deployment: use LevelDB (no config needed)
+  # For future MySQL backend, uncomment and update below:
+  # extraEnvironmentVars:
+  #   WEED_MYSQL_ENABLED: "true"
+  #   WEED_MYSQL_HOSTNAME: mysql.seaweedfs.svc.cluster.local
+  #   WEED_MYSQL_PORT: "3306"
+  #   WEED_MYSQL_DATABASE: seaweedfs_filer
+  #   WEED_MYSQL_USERNAME: seaweedfs
+  #   WEED_MYSQL_PASSWORD: your-password  # Use Sealed Secret!
+  #   WEED_MYSQL_CONNECTION_MAX_IDLE: "5"
+  #   WEED_MYSQL_CONNECTION_MAX_OPEN: "75"
+  #   WEED_MYSQL_CONNECTION_MAX_LIFETIME_SECONDS: "0"
+  
+  # LevelDB metadata persistence
   persistence:
-    enabled: false  # Metadata in MySQL, not local disk
+    enabled: true
+    size: 10Gi  # LevelDB metadata store
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -848,7 +875,7 @@ git push
 |---------|--------|------------|
 | **Learning curve** | New system to learn (Master, Filer, Volume Server concepts) | Well-documented, active community |
 | **Additional components** | More moving parts (3 masters, 2 filers, 2 volume servers) vs current (just VolSync operator) | Helm chart simplifies deployment |
-| **MySQL dependency** | Filer requires external database (MySQL/Postgres) | Can reuse existing MySQL or embed LevelDB (with caveats) |
+| **Metadata backend** | Filer metadata can be local (LevelDB) or external (MySQL/Postgres) | LevelDB is simpler for initial deploy; upgrade to MySQL if you need HA across multiple filers |
 | **Master is SPOF** | If all masters down, cluster is read-only | Deploy 3+ masters (tolerates 1 failure) |
 | **Network overhead** | All I/O is networked (vs local hostPath) | Acceptable for homelab; optimize with data locality |
 | **Resource usage** | ~2GB RAM for masters + filers + volume servers | Verify nodes have capacity |
@@ -877,9 +904,9 @@ git push
 ### 6.1 Phased Rollout
 
 **Phase 1: Deploy SeaweedFS (Week 1)**
-- [ ] Deploy MySQL for filer metadata
-- [ ] Deploy SeaweedFS Helm chart (3 masters, 2 volume servers, 2 filers, CSI)
+- [ ] Deploy SeaweedFS Helm chart (3 masters, 2 volume servers, filer(s) using LevelDB, CSI)
 - [ ] Create StorageClass with `010` replication
+- [ ] Create `/data/seaweed` and `/data/seaweed_master` on nodes and verify permissions
 - [ ] Deploy test pod with PVC to verify CSI driver works
 - [ ] Test failover: stop volume server on k3s-w1, verify I/O continues
 
@@ -936,7 +963,7 @@ git push
 **Tradeoffs accepted:**
 - More components to manage (masters, filers, volume servers)
 - Network overhead vs local disk (acceptable for media workloads)
-- MySQL dependency (already planned for Flux)
+- Metadata backend: LevelDB by default (local). Optional MySQL/Postgres for multi-filer HA.
 
 ### Next Steps
 

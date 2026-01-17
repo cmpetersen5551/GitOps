@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: seaweedfs
+  namespace: seaweedfs
+  labels:
+    app: seaweedfs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: seaweedfs
+  labels:
+    app: seaweedfs
+rules:
+  # Allow reading nodes (for topology labels)
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  # Allow reading pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Allow reading persistent volumes
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  # Allow reading persistent volume claims
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  # Allow reading storage classes
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: seaweedfs
+  labels:
+    app: seaweedfs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: seaweedfs
+subjects:
+  - kind: ServiceAccount
+    name: seaweedfs
+    namespace: seaweedfs
+---
+# CSI Driver controller permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: seaweedfs-csi-controller
+  labels:
+    app: seaweedfs
+rules:
+  # CSI provisioner
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: seaweedfs-csi-controller
+  labels:
+    app: seaweedfs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: seaweedfs-csi-controller
+subjects:
+  - kind: ServiceAccount
+    name: seaweedfs-csi-controller
+    namespace: seaweedfs
+---
+# CSI Node permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: seaweedfs-csi-node
+  labels:
+    app: seaweedfs
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: seaweedfs-csi-node
+  labels:
+    app: seaweedfs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: seaweedfs-csi-node
+subjects:
+  - kind: ServiceAccount
+    name: seaweedfs-csi-node
+    namespace: seaweedfs
+---
+# ServiceAccount for CSI controller
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: seaweedfs-csi-controller
+  namespace: seaweedfs
+  labels:
+    app: seaweedfs
+---
+# ServiceAccount for CSI node
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: seaweedfs-csi-node
+  namespace: seaweedfs
+  labels:
+    app: seaweedfs

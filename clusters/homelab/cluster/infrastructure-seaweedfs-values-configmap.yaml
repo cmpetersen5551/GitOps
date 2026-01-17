@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweedfs-values
+  namespace: flux-system
+data:
+  values.yaml: |-
+    ## SeaweedFS Helm values for HelmRelease
+    ## Mirrors clusters/homelab/infrastructure/seaweedfs/values.yaml
+    ## Node labels required:
+    ##   - topology.kubernetes.io/rack=rack-{1,2}  (on k3s-w1, k3s-w2)
+    ##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
+
+    global:
+      replicationPlacement: "010"
+
+    master:
+      enabled: true
+      replicas: 3
+      persistence:
+        enabled: true
+        size: 2Gi
+        storageClass: "local-path-provisioner"
+      data:
+        type: "hostPath"
+        hostPathPrefix: /data/seaweed_master
+
+    volume:
+      enabled: true
+      replicas: 2
+      nodeSelector:
+        sw-volume: "true"
+      dataDirs:
+        - name: data
+          type: hostPath
+          hostPathPrefix: /data/seaweed
+          maxVolumes: 100
+
+    filer:
+      enabled: true
+      replicas: 1
+      persistence:
+        enabled: true
+        size: 2Gi
+        storageClass: "local-path-provisioner"
+      data:
+        type: "hostPath"
+        hostPathPrefix: /data/seaweed_filer
+      extraEnvironmentVars:
+        WEED_MYSQL_ENABLED: "false"
+
+    csi:
+      driver:
+        enabled: true
+      controller:
+        replicas: 1
+      node:
+        enabled: true
+
+    resources:
+      master:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi
+      filer:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi
+      volume:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi

@@ -1,0 +1,38 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: seaweedfs
+  namespace: flux-system
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: seaweedfs
+      # Pin to v3 series; allows patch updates, prevents major version breaks
+      # Check releases: https://github.com/seaweedfs/seaweedfs/releases
+      version: ">=3.0.0 <4.0.0"
+      sourceRef:
+        kind: HelmRepository
+        name: seaweedfs-repo
+        namespace: flux-system
+  releaseName: seaweedfs
+  targetNamespace: seaweedfs
+  createNamespace: true
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  # Read values from ConfigMap in flux-system namespace
+  valuesFrom:
+    - kind: ConfigMap
+      name: seaweedfs-values
+      valuesKey: values.yaml
+  # Depends on infrastructure-seaweedfs Kustomization which creates:
+  # - seaweedfs namespace
+  # - RBAC (ServiceAccounts, ClusterRoles, ClusterRoleBindings)
+  # - StorageClass
+  dependsOn:
+    - name: infrastructure-seaweedfs
+      namespace: flux-system
