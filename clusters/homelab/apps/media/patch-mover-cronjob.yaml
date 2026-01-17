@@ -46,26 +46,23 @@ spec:
                 # Patch the deployment to add capabilities
                 kubectl patch deployment "$deployment" -n "$namespace" --type='json' -p='[
                   {
+                    "op": "add",
+                    "path": "/spec/template/spec/containers/0/securityContext/capabilities/add",
+                    "value": ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+                  }
+                ]' 2>/dev/null && return
+
+                # If that fails, try replacing the entire capabilities section
+                kubectl patch deployment "$deployment" -n "$namespace" --type='json' -p='[
+                  {
                     "op": "replace",
                     "path": "/spec/template/spec/containers/0/securityContext/capabilities",
                     "value": {
                       "add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
-                      "drop": []
+                      "drop": ["ALL"]
                     }
                   }
-                ]' 2>/dev/null || {
-                  # If replace fails, try add
-                  kubectl patch deployment "$deployment" -n "$namespace" --type='json' -p='[
-                    {
-                      "op": "add",
-                      "path": "/spec/template/spec/containers/0/securityContext/capabilities",
-                      "value": {
-                        "add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
-                        "drop": []
-                      }
-                    }
-                  ]' 2>/dev/null || true
-                }
+                ]' 2>/dev/null || true
               }
 
               # Patch all volsync mover deployments in the media namespace
