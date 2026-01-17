@@ -29,10 +29,3 @@ spec:
     - kind: ConfigMap
       name: seaweedfs-values
       valuesKey: values.yaml
-  # Depends on infrastructure-seaweedfs Kustomization which creates:
-  # - seaweedfs namespace
-  # - RBAC (ServiceAccounts, ClusterRoles, ClusterRoleBindings)
-  # - StorageClass
-  dependsOn:
-    - name: infrastructure-seaweedfs
-      namespace: flux-system
