@@ -178,9 +178,26 @@ Once the primary node recovers:
 
 ### Syncthing Troubleshooting
 - **Peers not connecting:** Check Syncthing service IPs are reachable (`kubectl get svc -n media | grep syncthing`)
+- **Permission denied / chmod errors:** Verify VolSync moverSecurityContext includes CHOWN, FOWNER, DAC_OVERRIDE capabilities (see [Configuration](#syncthing-configuration))
 - **Sync stuck:** Restart Syncthing pods: `kubectl delete pod -n media -l volsync.backube/mover=syncthing`
 - **Data divergence:** Since Syncthing is bidirectional, most-recent wins; verify integrity after recovery
 - **Network issues:** Ensure ClusterIP services are routable between nodes; check NetworkPolicy
+
+### Syncthing Configuration
+VolSync Syncthing pods require file capability bits to manage permissions on hostPath volumes:
+
+**Required capabilities in `moverSecurityContext`:**
+```yaml
+syncthing:
+  moverSecurityContext:
+    capabilities:
+      add:
+        - CHOWN       # Change file ownership
+        - FOWNER      # Bypass file ownership checks
+        - DAC_OVERRIDE # Override file permission checks
+```
+
+These are **minimal and necessary** for Syncthing to sync file permissions between nodes. All other capabilities are dropped for security.
 
 ## Monitoring & Health Checks
 
