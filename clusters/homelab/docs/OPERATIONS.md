@@ -82,6 +82,106 @@ kubectl delete pod -n media -l syncthing.io/role=destination
 flux reconcile kustomization infrastructure-storage -n flux-system
 ```
 
+## Syncthing Bidirectional Replication
+
+### Overview
+Prowlarr and Sonarr use **Syncthing-based VolSync** for continuous bidirectional synchronization between primary and backup nodes:
+- **Primary node (k3s-w1):** pvc-prowlarr, pvc-sonarr
+- **Backup node (k3s-w2):** pvc-prowlarr-backup, pvc-sonarr-backup
+- **Sync method:** Syncthing peer-to-peer (continuous, near real-time)
+- **Behavior:** Changes on either node propagate to the other; conflicts resolved by most-recent-modification timestamp
+
+### Monitor Syncthing Sync Status
+```bash
+# View ReplicationSource peers and connection status
+kubectl get replicationsource -n media -o wide
+kubectl get replicationsource -n media prowlarr-primary -o yaml | grep -A 20 "peers:"
+kubectl get replicationsource -n media prowlarr-backup -o yaml | grep -A 20 "peers:"
+
+# Check if peers are connected
+kubectl get replicationsource -n media -o jsonpath='{range .items[*]}{.metadata.name}{": connected="}{.status.syncthing.peers[0].connected}{"\n"}{end}'
+
+# View Syncthing pod logs
+kubectl logs -n media -l volsync.backube/mover=syncthing --tail=100
+
+# Verify data is syncing between nodes
+ssh user@<k3s-w1> ls -lh /data/pods/prowlarr/
+ssh user@<k3s-w2> ls -lh /data/pods/prowlarr/
+```
+
+### Failover from Primary to Backup
+If the primary node (k3s-w1) fails:
+
+1. **Verify backup node is healthy:**
+   ```bash
+   kubectl get nodes -o wide
+   kubectl get node k3s-w2 -o yaml | grep -A 5 "conditions:"
+   ```
+
+2. **Update deployment to use backup PVC and node:**
+   ```bash
+   # Edit apps/media/prowlarr/deployment.yaml (and sonarr if needed)
+   # Change:
+   #   claimName: pvc-prowlarr  →  pvc-prowlarr-backup
+   #   nodeAffinity role: primary  →  role: backup
+   
+   git add clusters/homelab/apps/media/prowlarr/deployment.yaml
+   git commit -m "Failover: Prowlarr to backup node (k3s-w2)"
+   git push
+   ```
+
+3. **Monitor pod rescheduling:**
+   ```bash
+   kubectl rollout status deployment -n media prowlarr -w
+   ```
+
+4. **Verify app is running on backup with synced data:**
+   ```bash
+   kubectl get pod -n media -l app=prowlarr -o wide
+   kubectl logs -n media -l app=prowlarr --tail=50
+   ```
+
+### Failback to Primary (After Recovery)
+Once the primary node recovers:
+
+1. **Allow Syncthing to fully sync backup → primary:**
+   ```bash
+   # Monitor sync progress on backup ReplicationSource
+   watch 'kubectl get replicationsource -n media prowlarr-backup -o yaml | grep -A 30 status'
+   
+   # Wait for status to show "in-progress" with full sync completion
+   ```
+
+2. **Update deployment to use primary PVC and node:**
+   ```bash
+   # Edit apps/media/prowlarr/deployment.yaml
+   # Change:
+   #   claimName: pvc-prowlarr-backup  →  pvc-prowlarr
+   #   nodeAffinity role: backup  →  role: primary
+   
+   git add clusters/homelab/apps/media/prowlarr/deployment.yaml
+   git commit -m "Failback: Prowlarr to primary node (k3s-w1)"
+   git push
+   ```
+
+3. **Monitor pod rescheduling:**
+   ```bash
+   kubectl rollout status deployment -n media prowlarr -w
+   ```
+
+4. **Verify app is running on primary with latest data:**
+   ```bash
+   kubectl get pod -n media -l app=prowlarr -o wide
+   # Confirm data integrity by checking Syncthing logs
+   kubectl logs -n media -l volsync.backube/mover=syncthing --tail=50
+   ```
+
+### Syncthing Troubleshooting
+- **Peers not connecting:** Check Syncthing service IPs are reachable (`kubectl get svc -n media | grep syncthing`)
+- **Sync stuck:** Restart Syncthing pods: `kubectl delete pod -n media -l volsync.backube/mover=syncthing`
+- **Data divergence:** Since Syncthing is bidirectional, most-recent wins; verify integrity after recovery
+- **Network issues:** Ensure ClusterIP services are routable between nodes; check NetworkPolicy
+
 ## Monitoring & Health Checks
 
 ### Cluster Health
@@ -357,9 +457,11 @@ git push
 kubectl rollout status deployment -n <namespace> <app-name> -w
 ```
 
-### Manual Failover (Emergency)
+### Manual Failover (Emergency - Non-Syncthing Apps)
 
-**Note:** Only do this if primary node is completely down and won't recover
+**Note:** Only do this for apps NOT using Syncthing replication. For Prowlarr/Sonarr, follow the [Syncthing Failover](#failover-from-primary-to-backup) procedure above.
+
+If primary node is completely down and won't recover:
 
 ```bash
 # 1. Verify backup node is healthy
