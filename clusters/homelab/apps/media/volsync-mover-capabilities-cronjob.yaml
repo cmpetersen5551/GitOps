@@ -51,13 +51,21 @@ spec:
                   continue
                 fi
 
-                # Apply the patch
+                # Get current security context and add capabilities while keeping other settings
                 echo "Patching $deployment..."
                 kubectl patch deployment "$deployment" -n media --type='json' -p='[
                   {
-                    "op": "add",
-                    "path": "/spec/template/spec/containers/0/securityContext/capabilities/add",
-                    "value": ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+                    "op": "replace",
+                    "path": "/spec/template/spec/containers/0/securityContext",
+                    "value": {
+                      "allowPrivilegeEscalation": false,
+                      "capabilities": {
+                        "add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
+                        "drop": ["NET_RAW"]
+                      },
+                      "privileged": false,
+                      "readOnlyRootFilesystem": true
+                    }
                   }
                 ]' 2>/dev/null || {
                   echo "Failed to patch $deployment (may not exist yet)"
