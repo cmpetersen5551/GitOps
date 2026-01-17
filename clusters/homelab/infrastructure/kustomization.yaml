@@ -4,3 +4,4 @@ resources:
   - ./metallb
   - ./traefik
   - ./seaweedfs
+  - ./seaweedfs-csi

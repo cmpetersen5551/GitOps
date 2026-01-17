@@ -1,15 +1,14 @@
+---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: seaweedfs
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "false"
+  name: seaweedfs-storage-class
+  namespace: seaweedfs
 provisioner: seaweedfs-csi-driver
 parameters:
   # These parameters are passed to the CSI driver
-  mounter: "fuse"  # Use FUSE mount for performance
+  mounter: "fuse"  # Use FUSE mount instead of WebDAV
   volumeType: "file"
   replication: "1"  # Number of copies to maintain
 allowVolumeExpansion: true
-reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer  # Topology-aware provisioning

@@ -1,0 +1,224 @@
+---
+# SeaweedFS Mount DaemonSet (mounts PVs using FUSE)
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: seaweedfs-mount
+  namespace: seaweedfs
+spec:
+  selector:
+    matchLabels:
+      app: seaweedfs-mount
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: seaweedfs-mount
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: seaweedfs-node-sa
+      containers:
+        - name: seaweedfs-mount
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+            privileged: true
+          image: chrislusf/seaweedfs-mount:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --endpoint=$(MOUNT_ENDPOINT)
+          env:
+            - name: MOUNT_ENDPOINT
+              value: "unix:///var/lib/seaweedfs-mount/seaweedfs-mount.sock"
+          volumeMounts:
+            - name: plugins-dir
+              mountPath: /var/lib/kubelet/plugins
+              mountPropagation: "Bidirectional"
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+            - name: device-dir
+              mountPath: /dev
+            - name: cache
+              mountPath: /var/cache/seaweedfs
+            - name: mount-socket-dir
+              mountPath: /var/lib/seaweedfs-mount
+          resources: {}
+      volumes:
+        - name: plugins-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
+        - name: cache
+          emptyDir: {}
+        - name: mount-socket-dir
+          hostPath:
+            path: /var/lib/seaweedfs-mount
+            type: DirectoryOrCreate
+---
+# CSI Node Plugin DaemonSet (runs on all nodes for volume attachment/mounting)
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: seaweedfs-node
+  namespace: seaweedfs
+spec:
+  selector:
+    matchLabels:
+      app: seaweedfs-node
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: seaweedfs-node
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: seaweedfs-node-sa
+      containers:
+        # SeaweedFS CSI Plugin (node component)
+        - name: csi-seaweedfs-plugin
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+            privileged: true
+          image: chrislusf/seaweedfs-csi-driver:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --endpoint=$(CSI_ENDPOINT)
+            - --filer=$(SEAWEEDFS_FILER)
+            - --nodeid=$(NODE_ID)
+            - --driverName=$(DRIVER_NAME)
+            - --mountEndpoint=$(MOUNT_ENDPOINT)
+            - --cacheDir=/var/cache/seaweedfs
+            - --components=node
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: SEAWEEDFS_FILER
+              # Point to seaweedfs filer service
+              value: "seaweedfs-filer-client.seaweedfs:8888"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DRIVER_NAME
+              value: "seaweedfs-csi-driver"
+            - name: MOUNT_ENDPOINT
+              value: "unix:///var/lib/seaweedfs-mount/seaweedfs-mount.sock"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 60
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: plugins-dir
+              mountPath: /var/lib/kubelet/plugins
+              mountPropagation: "Bidirectional"
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+            - mountPath: /dev
+              name: device-dir
+            - name: cache
+              mountPath: /var/cache/seaweedfs
+            - name: mount-socket-dir
+              mountPath: /var/lib/seaweedfs-mount
+          resources: {}
+
+        # CSI Node Driver Registrar (registers this node plugin with kubelet)
+        - name: driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --http-endpoint=:9809
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/seaweedfs-csi-driver/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - containerPort: 9809
+              name: healthz
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 60
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi/
+            - name: registration-dir
+              mountPath: /registration/
+          resources: {}
+
+        # CSI Liveness Probe
+        - name: csi-liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --http-endpoint=:9808
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          ports:
+            - containerPort: 9808
+              name: livenessprobe
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+          resources: {}
+
+      volumes:
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/seaweedfs-csi-driver
+            type: DirectoryOrCreate
+        - name: plugins-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
+        - name: cache
+          emptyDir: {}
+        - name: mount-socket-dir
+          hostPath:
+            path: /var/lib/seaweedfs-mount
+            type: DirectoryOrCreate

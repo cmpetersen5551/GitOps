@@ -1,0 +1,6 @@
+# SeaweedFS CSI Driver namespace
+# Note: Uses existing 'seaweedfs' namespace created by main SeaweedFS Helm release
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seaweedfs
