@@ -8,7 +8,7 @@ metadata:
   name: volsync-mover-capabilities
   namespace: media
 spec:
-  schedule: "*/5 * * * *"  # Run every 5 minutes to ensure compliance
+  schedule: "* * * * *"  # Run every minute to maintain capability patches
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
