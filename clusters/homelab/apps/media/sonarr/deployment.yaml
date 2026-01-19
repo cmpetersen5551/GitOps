@@ -63,9 +63,9 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 30
           volumeMounts:
-            - name: sonarr-data
+            - name: config-volume
               mountPath: /config
       volumes:
-        - name: sonarr-data
+        - name: config-volume
           persistentVolumeClaim:
             claimName: pvc-sonarr

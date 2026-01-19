@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - ./metallb
   - ./traefik
+  - ./storage
   - ./seaweedfs
   - ./seaweedfs-csi

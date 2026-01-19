@@ -7,8 +7,8 @@ metadata:
     app: sonarr
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
-  storageClassName: seaweedfs
+  storageClassName: ""
