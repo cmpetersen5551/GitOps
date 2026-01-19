@@ -12,7 +12,7 @@ data:
     ##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
 
     global:
-      replicationPlacement: "01"
+      replicationPlacement: "010"
 
     master:
       enabled: true
@@ -24,20 +24,40 @@ data:
       data:
         type: "hostPath"
         hostPathPrefix: /data/seaweed_master
-      # Override default replication via environment variable
-      extraEnvironmentVars:
-        WEED_MASTER_DEFAULT_REPLICATION: "01"
+      # Master defaultReplication is hardcoded in chart; patched via kubectl
+      defaultReplication: "010"
 
+    # Disable single volume server config - use multi-rack volumes instead
     volume:
-      enabled: true
-      replicas: 2
-      nodeSelector: |-
-        sw-volume: "true"
-      dataDirs:
-        - name: data
-          type: hostPath
-          hostPathPrefix: /data/seaweed
-          maxVolumes: 100
+      enabled: false
+
+    # Multi-rack volume server configuration
+    # This creates separate StatefulSets per rack with proper topology
+    volumes:
+      rack1:
+        replicas: 1
+        rack: "rack-1"
+        dataCenter: "dc1"
+        nodeSelector: |-
+          sw-volume: "true"
+          topology.kubernetes.io/rack: rack-1
+        dataDirs:
+          - name: data
+            type: hostPath
+            hostPathPrefix: /data/seaweed
+            maxVolumes: 100
+      rack2:
+        replicas: 1
+        rack: "rack-2"
+        dataCenter: "dc1"
+        nodeSelector: |-
+          sw-volume: "true"
+          topology.kubernetes.io/rack: rack-2
+        dataDirs:
+          - name: data
+            type: hostPath
+            hostPathPrefix: /data/seaweed
+            maxVolumes: 100
 
     filer:
       enabled: true
