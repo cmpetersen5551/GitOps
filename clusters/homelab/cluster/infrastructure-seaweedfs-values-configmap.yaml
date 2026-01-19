@@ -24,6 +24,9 @@ data:
       data:
         type: "hostPath"
         hostPathPrefix: /data/seaweed_master
+      # Override default replication via environment variable
+      extraEnvironmentVars:
+        WEED_MASTER_DEFAULT_REPLICATION: "01"
 
     volume:
       enabled: true
