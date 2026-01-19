@@ -32,9 +32,9 @@ volumes:
     replicas: 1
     rack: "rack-1"
     dataCenter: "dc1"
-    nodeSelector: |
+    nodeSelector:
       sw-volume: "true"
-      topology.kubernetes.io/rack: rack-1
+      topology.kubernetes.io/rack: "rack-1"
     dataDirs:
       - name: data
         type: hostPath
@@ -44,9 +44,9 @@ volumes:
     replicas: 1
     rack: "rack-2"
     dataCenter: "dc1"
-    nodeSelector: |
+    nodeSelector:
       sw-volume: "true"
-      topology.kubernetes.io/rack: rack-2
+      topology.kubernetes.io/rack: "rack-2"
     dataDirs:
       - name: data
         type: hostPath
