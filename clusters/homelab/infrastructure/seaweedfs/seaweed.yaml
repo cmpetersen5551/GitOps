@@ -19,41 +19,23 @@ spec:
       cpu: 250m
       memory: 256Mi
 
-  # Multi-rack volume server topology
-  volumeTopology:
-    rack1:
-      replicas: 1
-      rack: "rack-1"
-      dataCenter: "dc1"
-      nodeSelector:
-        sw-volume: "true"
-        topology.kubernetes.io/rack: "rack-1"
-      requests:
-        storage: 100Gi
-        cpu: 250m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-      storageClassName: "local-path"
-      maxVolumeCounts: 100
-    
-    rack2:
-      replicas: 1
-      rack: "rack-2"
-      dataCenter: "dc1"
-      nodeSelector:
-        sw-volume: "true"
-        topology.kubernetes.io/rack: "rack-2"
-      requests:
-        storage: 100Gi
-        cpu: 250m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-      storageClassName: "local-path"
-      maxVolumeCounts: 100
+  # Simple volume server configuration (will support all nodes)
+  volume:
+    replicas: 2
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      storage: 100Gi
+      cpu: 250m
+      memory: 256Mi
+    # Set rack/datacenter for simple topology
+    rack: "rack-1"
+    dataCenter: "dc1"
+    # Node selector for volume servers
+    nodeSelector:
+      sw-volume: "true"
+    maxVolumeCounts: 100
 
   # Filer server configuration
   filer:
