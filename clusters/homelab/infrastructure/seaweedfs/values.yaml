@@ -6,7 +6,7 @@
 ##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
 
 global:
-  replicationPlacement: "010"  # 1 replica on different rack
+  replicationPlacement: "01"  # 1 replica on different rack (works with 2 volume servers)
 
 master:
   enabled: true

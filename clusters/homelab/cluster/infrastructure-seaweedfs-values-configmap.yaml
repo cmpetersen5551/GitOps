@@ -12,7 +12,7 @@ data:
     ##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
 
     global:
-      replicationPlacement: "010"
+      replicationPlacement: "01"
 
     master:
       enabled: true
