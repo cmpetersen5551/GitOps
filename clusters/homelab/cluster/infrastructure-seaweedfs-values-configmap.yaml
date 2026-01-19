@@ -12,7 +12,7 @@ data:
     ##   - sw-volume=true  (on k3s-w1, k3s-w2 for volume servers)
 
     global:
-      replicationPlacement: "010"
+      replicationPlacement: "001"
 
     master:
       enabled: true
@@ -25,7 +25,7 @@ data:
         type: "hostPath"
         hostPathPrefix: /data/seaweed_master
       # Master defaultReplication is hardcoded in chart; patched via kubectl
-      defaultReplication: "010"
+      defaultReplication: "001"
 
     # Disable single volume server config - use multi-rack volumes instead
     volume:
