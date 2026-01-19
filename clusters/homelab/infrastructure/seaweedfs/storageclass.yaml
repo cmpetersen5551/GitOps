@@ -6,9 +6,9 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "false"
 provisioner: seaweedfs-csi-driver
 parameters:
-  # 010: 1 replica on a different rack (requires 2 racks)
-  # Now properly configured with multi-rack volume servers
-  replication: "010"
+  # 001: 1 replica on a different rack in same datacenter (requires 2 racks)
+  # Managed by SeaweedFS Operator with proper multi-rack topology
+  replication: "001"
   # Base path for buckets in filer - apps write to /buckets/<pvc-name>
   path: /buckets
   # Disk type preference (hdd or ssd)

@@ -1,0 +1,87 @@
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: seaweedfs
+  namespace: seaweedfs
+spec:
+  image: chrislusf/seaweedfs:latest
+  
+  # Master servers configuration
+  master:
+    replicas: 3
+    defaultReplication: "001"  # 1 replica across different racks
+    volumeSizeLimitMB: 1024
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClassName: "local-path"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # Multi-rack volume server topology
+  volumeTopology:
+    rack1:
+      replicas: 1
+      rack: "rack-1"
+      dataCenter: "dc1"
+      nodeSelector:
+        sw-volume: "true"
+        topology.kubernetes.io/rack: "rack-1"
+      requests:
+        storage: 100Gi
+      storageClassName: "local-path"
+      maxVolumeCounts: 100
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi
+    
+    rack2:
+      replicas: 1
+      rack: "rack-2"
+      dataCenter: "dc1"
+      nodeSelector:
+        sw-volume: "true"
+        topology.kubernetes.io/rack: "rack-2"
+      requests:
+        storage: 100Gi
+      storageClassName: "local-path"
+      maxVolumeCounts: 100
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi
+
+  # Filer server configuration
+  filer:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClassName: "local-path"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    config: |
+      [leveldb2]
+      enabled = true
+      dir = "/data/filerldb2"
+
+  # Volume server disk count
+  volumeServerDiskCount: 1

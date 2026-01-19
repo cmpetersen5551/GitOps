@@ -5,4 +5,4 @@ resources:
   - ./traefik
   - ./storage
   - ./seaweedfs
-  - ./seaweedfs-csi
+  - ./seaweedfs-operator
