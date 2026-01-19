@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - cluster/infrastructure-metallb.yaml
   - cluster/infrastructure-seaweedfs-operator-kustomization.yaml
+  - cluster/infrastructure-seaweedfs-csi-driver-kustomization.yaml
   - cluster/infrastructure-seaweedfs-kustomization.yaml
   - cluster/infrastructure-traefik.yaml
   - cluster/apps-kustomization.yaml
