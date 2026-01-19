@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - seaweed.yaml
   - storageclass.yaml
 
 commonLabels:
