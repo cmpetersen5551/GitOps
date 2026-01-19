@@ -10,10 +10,10 @@ neighbor 192.168.1.120 description k3s-w1
 neighbor 192.168.1.120 route-map ALLOW-ALL in
 neighbor 192.168.1.120 route-map ALLOW-ALL out
 !
-neighbor 192.168.1.29 remote-as 65001
-neighbor 192.168.1.29 description k3s-w2
-neighbor 192.168.1.29 route-map ALLOW-ALL in
-neighbor 192.168.1.29 route-map ALLOW-ALL out
+neighbor 192.168.1.153 remote-as 65001
+neighbor 192.168.1.153 description k3s-w2
+neighbor 192.168.1.153 route-map ALLOW-ALL in
+neighbor 192.168.1.153 route-map ALLOW-ALL out
 !
 neighbor 192.168.1.243 remote-as 65001
 neighbor 192.168.1.243 description k3s-cp1
@@ -23,10 +23,10 @@ neighbor 192.168.1.243 route-map ALLOW-ALL out
 address-family ipv4 unicast
 network 192.168.254.0 mask 255.255.255.0
 neighbor 192.168.1.120 activate
-neighbor 192.168.1.29 activate
+neighbor 192.168.1.153 activate
 neighbor 192.168.1.243 activate
 neighbor 192.168.1.120 soft-reconfiguration inbound
-neighbor 192.168.1.29 soft-reconfiguration inbound
+neighbor 192.168.1.153 soft-reconfiguration inbound
 neighbor 192.168.1.243 soft-reconfiguration inbound
 exit-address-family
 !
