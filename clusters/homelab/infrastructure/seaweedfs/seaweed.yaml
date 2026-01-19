@@ -12,23 +12,25 @@ spec:
     replicas: 3
     defaultReplication: "001"  # 1 replica across different racks
     volumeSizeLimitMB: 1024
-    limits:
-      cpu: 500m
-      memory: 512Mi
-    requests:
-      cpu: 250m
-      memory: 256Mi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
 
   # Simple volume server configuration (will support all nodes)
   volume:
     replicas: 2
-    limits:
-      cpu: 500m
-      memory: 512Mi
-    requests:
-      storage: 100Gi
-      cpu: 250m
-      memory: 256Mi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    storage: 100Gi
     # Set rack/datacenter for simple topology
     rack: "rack-1"
     dataCenter: "dc1"
@@ -40,16 +42,10 @@ spec:
   # Filer server configuration
   filer:
     replicas: 1
-    limits:
-      cpu: 500m
-      memory: 512Mi
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    config: |
-      [leveldb2]
-      enabled = true
-      dir = "/data/filerldb2"
-
-  # Volume server disk count
-  volumeServerDiskCount: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
