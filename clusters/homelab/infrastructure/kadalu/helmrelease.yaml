@@ -7,5 +7,17 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: https://github.com/kadalu/kadalu/releases/latest/download/kadalu-helm-chart.tgz
-      version: "0.8.0"
+      chart: kadalu
+      sourceRef:
+        kind: HelmRepository
+        name: kadalu
+        namespace: flux-system
+      version: "*"
+  install:
+    crds: Create
+  upgrade:
+    crds: CreateReplace
+  values:
+    namespace:
+      create: true
+      name: kadalu
