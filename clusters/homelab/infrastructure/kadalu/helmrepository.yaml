@@ -5,4 +5,4 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
-  url: https://kadalu.github.io/kadalu-helm
+  url: https://github.com/kadalu/kadalu/releases/download/1.3.0
