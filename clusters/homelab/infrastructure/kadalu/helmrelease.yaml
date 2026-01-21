@@ -7,9 +7,5 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: kadalu-operator
+      chart: https://github.com/kadalu/kadalu/releases/latest/download/kadalu-helm-chart.tgz
       version: "0.8.0"
-      sourceRef:
-        kind: HelmRepository
-        name: kadalu
-        namespace: flux-system
