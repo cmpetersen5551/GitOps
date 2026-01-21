@@ -5,3 +5,11 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  chart:
+    spec:
+      chart: kadalu-operator
+      version: "0.8.0"
+      sourceRef:
+        kind: HelmRepository
+        name: kadalu-repo
+        namespace: flux-system
