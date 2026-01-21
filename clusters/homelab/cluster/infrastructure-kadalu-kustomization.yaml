@@ -5,7 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  path: ../../infrastructure/kadalu
+  path: clusters/homelab/infrastructure/kadalu
   prune: true
   sourceRef:
     kind: GitRepository
