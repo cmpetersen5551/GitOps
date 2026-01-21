@@ -4,4 +4,4 @@ resources:
   - cluster/infrastructure-metallb.yaml
   - cluster/infrastructure-traefik.yaml
   - cluster/apps-kustomization.yaml
-  - infrastructure-kadalu-kustomization.yaml  # Add Kadalu infrastructure kustomization
+  - infrastructure-kadalu-kustomization.yaml  # Correct path for Kadalu infrastructure kustomization
