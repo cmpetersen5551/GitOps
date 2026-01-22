@@ -10,6 +10,6 @@ spec:
   type: Replica2
   storage:
     - node: k3s-w1
-      device: /data/gluster/brick1
+      path: /data/gluster/brick1
     - node: k3s-w2
-      device: /data/gluster/brick1
+      path: /data/gluster/brick1
