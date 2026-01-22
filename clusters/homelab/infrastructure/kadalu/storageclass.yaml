@@ -1,0 +1,16 @@
+---
+# StorageClass for Kadalu/GlusterFS
+# Provides dynamic PVC provisioning for media workloads
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kadalu.replica2
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kadalu
+parameters:
+  storage: kadalu-storage
+  kadalu_format: native
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer

@@ -1,0 +1,25 @@
+---
+# KadaluStorage - Defines the GlusterFS storage pool
+# Configured for 2-node replica (w1 and w2)
+apiVersion: kadalu-operator.storage/v1alpha1
+kind: KadaluStorage
+metadata:
+  name: kadalu-storage
+  namespace: kadalu
+spec:
+  type: Replica2
+  # Storage nodes - both k3s-w1 and k3s-w2
+  storage:
+    - node: k3s-w1
+      device: /data/gluster/brick1
+    - node: k3s-w2
+      device: /data/gluster/brick1
+  # Configuration for GlusterFS quorum and self-healing
+  options:
+    # Allow single node operation when other is down
+    cluster.quorum-type: auto
+    # Optimize for media workloads (large sequential reads/writes)
+    performance.cache-size: 256MB
+    performance.read-ahead: "on"
+    performance.write-behind-window-size: 4MB
+    performance.stat-prefetch: "on"
