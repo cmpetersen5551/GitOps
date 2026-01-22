@@ -1,6 +1,7 @@
 ---
 # KadaluStorage - Defines the GlusterFS storage pool
 # Configured for 2-node replica (w1 and w2)
+# Using subdirectory gluster-brick for brick data
 apiVersion: kadalu-operator.storage/v1alpha1
 kind: KadaluStorage
 metadata:
@@ -10,6 +11,6 @@ spec:
   type: Replica2
   storage:
     - node: k3s-w1
-      path: /data/gluster/brick1
+      path: /data/gluster/brick1/gluster-brick
     - node: k3s-w2
-      path: /data/gluster/brick1
+      path: /data/gluster/brick1/gluster-brick
