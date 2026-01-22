@@ -4,3 +4,8 @@ resources:
   - manifests.yaml
   - storage.yaml
   - storageclass.yaml
+
+# k3s-specific patch to set correct kubelet directory
+# CSI daemonset will be regenerated with correct paths
+patchesStrategicMerge:
+  - operator-patch.yaml

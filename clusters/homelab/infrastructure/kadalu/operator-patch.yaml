@@ -1,0 +1,19 @@
+---
+# k3s-specific patch for Kadalu operator
+# k3s uses /var/lib/rancher/k3s/agent/kubelet/ instead of /var/lib/kubelet/
+# This patch ensures CSI daemonset is created with correct paths
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kadalu-operator
+  namespace: kadalu
+spec:
+  template:
+    spec:
+      containers:
+      - name: operator
+        env:
+        - name: KUBELET_DIR
+          value: "/var/lib/rancher/k3s/agent/kubelet"
+        - name: K8S_DIST
+          value: "k3s"
