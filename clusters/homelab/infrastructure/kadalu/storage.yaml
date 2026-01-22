@@ -8,8 +8,7 @@ metadata:
   namespace: kadalu
 spec:
   type: Replica2
-  # Storage nodes configuration
-  disks:
+  storage:
     - node: k3s-w1
       device: /data/gluster/brick1
     - node: k3s-w2
