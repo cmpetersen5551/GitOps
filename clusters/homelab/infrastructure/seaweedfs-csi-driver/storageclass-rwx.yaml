@@ -2,10 +2,12 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: seaweedfs-ha
+  name: seaweedfs-ha-rwx
 provisioner: seaweedfs-csi-driver
 parameters:
   replication: "032"
   diskType: "hdd"
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - rw

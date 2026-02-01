@@ -10,7 +10,7 @@ spec:
   # Master servers configuration
   master:
     replicas: 3
-    defaultReplication: "001"  # 1 replica across different racks
+    defaultReplication: "032"  # 3 replicas across different hosts, 2 different racks
     volumeSizeLimitMB: 1024
     limits:
       cpu: 500m
@@ -21,7 +21,7 @@ spec:
 
   # Simple volume server configuration (will support all nodes)
   volume:
-    replicas: 2
+    replicas: 3
     limits:
       cpu: 500m
       memory: 512Mi
