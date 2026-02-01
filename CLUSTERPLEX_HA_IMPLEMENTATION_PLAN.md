@@ -199,7 +199,7 @@ lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir
 | k3s-cp3 | 192.168.1.30 | k3s-cp3 | Raspberry Pi |
 
 **Physical Hosts:**
-- Proxmox: 192.168.1.10
+- Proxmox: 192.168.1.19
 - Unraid: 192.168.1.29
 
 ### Control Plane VIP (kube-vip)
