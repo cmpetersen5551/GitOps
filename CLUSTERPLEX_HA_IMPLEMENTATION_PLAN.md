@@ -28,7 +28,7 @@ This plan outlines the implementation of a High Availability Kubernetes cluster 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ PROXMOX HOST (Primary Compute)                               │
-│ IP: 192.168.1.10                                             │
+│ IP: 192.168.1.19                                             │
 │                                                              │
 │  K8s Nodes:                                                  │
 │  ├─ k3s-cp1 (VM) - Control Plane #1                         │
