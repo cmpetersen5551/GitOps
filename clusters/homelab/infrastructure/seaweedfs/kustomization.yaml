@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - seaweed.yaml
+  - ../storage/nfs/pv-nfs-media.yaml
+  - ../storage/nfs/pv-nfs-transcode.yaml
 
 commonLabels:
   app: seaweedfs
