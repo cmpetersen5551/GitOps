@@ -32,6 +32,8 @@ spec:
     # Node selector for volume servers
     nodeSelector:
       sw-volume: "true"
+    # Use local-path storage for SeaweedFS volume data (not CSI)
+    storageClassName: local-path
 
   # Filer server configuration
   filer:
