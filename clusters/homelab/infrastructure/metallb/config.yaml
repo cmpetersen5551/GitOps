@@ -19,24 +19,20 @@ spec:
 apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement
 metadata:
+  name: traefik-vpc
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - traefik-vip
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
   name: default
   namespace: metallb-system
 spec:
   ipAddressPools:
   - default
-  - traefik-vip
----
-apiVersion: policy.metallb.io/v1beta1
-kind: ServiceL2Advertisement
-metadata:
-  name: traefik-l2
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-  - traefik-vip
-  selectors:
-  - matchLabels:
-      app.kubernetes.io/name: traefik
 ---
 apiVersion: metallb.io/v1beta2
 kind: BGPPeer
