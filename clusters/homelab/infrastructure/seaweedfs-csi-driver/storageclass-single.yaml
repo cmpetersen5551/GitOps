@@ -5,7 +5,7 @@ metadata:
   name: seaweedfs-single
 provisioner: seaweedfs-csi-driver
 parameters:
-  replication: "010"
+  replication: "002"
   diskType: "hdd"
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer

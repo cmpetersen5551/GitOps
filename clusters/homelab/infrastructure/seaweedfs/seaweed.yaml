@@ -10,7 +10,7 @@ spec:
   # Master servers configuration
   master:
     replicas: 3
-    defaultReplication: "010"  # Bootstrap with single-node replication, upgrade to 032 once volume servers are healthy
+    defaultReplication: "002"  # 3x replication in same rack (interim solution, see Phase 6 note in plan)
     volumeSizeLimitMB: 1024
     limits:
       cpu: 500m

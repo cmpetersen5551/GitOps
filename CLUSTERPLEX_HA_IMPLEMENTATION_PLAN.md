@@ -290,6 +290,15 @@ mount -t nfs 192.168.1.29:/mnt/user/transcode /mnt/unraid/transcode
 ```yaml
 replication: "032"  # 0 same-rack, 3 different-hosts, 2 different-racks
 # Ensures replicas spread across physical locations
+
+# INTERIM NOTE (Phase 2 - Current Status):
+# Currently using replication "002" (3 copies in same rack) as an interim solution
+# while awaiting full topology setup. This provides 3x data redundancy across 3 nodes
+# (cp1, w1, w2) but all in same "logical rack" until Phase 6 when we:
+#  - Add cp2 (Unraid) and cp3 (Raspberry Pi)  
+#  - Configure proper rack topology with volume server -rack flags
+#  - Migrate to replication "032" for true geographic redundancy
+# Current topology: cp1,w1 on Proxmox | w2 on Unraid (all seen as single rack by SeaweedFS)
 ```
 
 **Storage Classes:**
