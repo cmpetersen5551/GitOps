@@ -1,9 +1,9 @@
 # ClusterPlex HA Implementation Plan
 
-**Version:** 1.0  
-**Date:** January 23, 2026  
+**Version:** 1.1  
+**Date:** February 10, 2026  
 **Branch:** v2 (branched from seaweedfs)  
-**Status:** Planning Phase  
+**Status:** Phase 4 Complete (Sonarr + MetalLB/BGP HA Validated)  
 
 ---
 
@@ -224,13 +224,30 @@ All nodes join cluster using: `https://192.168.1.100:6443`
 - ClusterPlex Orchestrator exposed via LoadBalancer service
 - Docker workers connect to LoadBalancer IP directly
 
-**MetalLB Configuration:**
-- Address pool: 192.168.1.150-192.168.1.200 (or as configured)
-- BGP peering with UDM (already configured)
-- **Action Required:** Update UDM BGP config for new node IPs (cp2, cp3, w2, w3)
+**MetalLB Configuration (IMPLEMENTED):**
+- **Mode:** Pure BGP (NOT L2) for true ECMP HA
+- **Address Pools:**
+  - `traefik-vip`: 192.168.100.100/32 (dedicated for Traefik ingress)
+  - `default`: 192.168.100.101-192.168.100.110 (general LoadBalancer pool)
+- **Subnet:** 192.168.100.0/24 (SEPARATE from management network 192.168.1.0/24)
+- **BGP Peering:** All K8s nodes peer with UDM (192.168.1.1) using ASN 64512
+- **ECMP:** UDM learns routes from all nodes, load balances across them
+
+**CRITICAL: VIP Subnet Separation**
+VIPs MUST be in a separate subnet from node management IPs. Using the same subnet (e.g., 192.168.1.0/24) causes ARP conflicts where the UDM tries to ARP for VIPs instead of routing via BGP, breaking ECMP and causing intermittent connectivity issues.
+
+**k3s servicelb Requirement:**
+k3s built-in servicelb (Klipper LoadBalancer) MUST be disabled for MetalLB to function. Disable by adding `--disable=servicelb` to k3s server/agent startup flags in `/etc/systemd/system/k3s.service`.
+
+**UDM BGP Configuration:**
+- UDM peers with each K8s node individually
+- UDM does NOT advertise VIP networks (no `network` statements)
+- UDM only LEARNS routes from MetalLB nodes
+- Route-maps: ALLOW-ALL in/out (permit all learned routes)
 
 **CoreDNS Configuration:**
 - In-cluster DNS for *.svc.cluster.local
+- External DNS (UniFi DNS) resolves homelab domain to VIPs
 - No additional configuration needed for external workers
 
 ---
@@ -670,6 +687,81 @@ replication: "032"  # 0 same-rack, 3 different-hosts, 2 different-racks
 - SeaweedFS snapshot/replication to external storage
 - Sonarr/Plex config backups
 - Disaster recovery runbook
+
+---
+
+## Implementation Lessons Learned
+
+### Lesson 1: VIP Subnet Separation is Critical for BGP
+**Issue:** Initially attempted to use VIP pool 192.168.1.150-200 (same subnet as management network). This caused ARP conflicts where the UDM router would try to ARP for VIP addresses instead of routing them via BGP, breaking ECMP and causing intermittent connectivity.
+
+**Root Cause:** When VIPs are in the same subnet as the gateway's own interface, Layer 2 ARP takes precedence over Layer 3 BGP routing. The router assumes VIPs are local and attempts direct ARP resolution instead of consulting the BGP routing table.
+
+**Solution:** Moved VIP pool to separate subnet 192.168.100.0/24. This forces the UDM to route VIP traffic via BGP (Layer 3) rather than attempting ARP (Layer 2), enabling proper ECMP load balancing across all K8s nodes.
+
+**Best Practice:** Always use a dedicated subnet for MetalLB VIPs when using BGP mode, completely separate from node management networks and gateway interfaces.
+
+### Lesson 2: k3s servicelb Conflicts with MetalLB
+**Issue:** k3s includes a built-in LoadBalancer implementation (servicelb/Klipper) that conflicts with MetalLB. Both try to manage LoadBalancer services, causing MetalLB to malfunction.
+
+**Solution:** Disable k3s servicelb by adding `--disable=servicelb` to k3s startup flags in `/etc/systemd/system/k3s.service`, then restart k3s service.
+
+**Implementation:**
+```bash
+# On control plane node
+sudo systemctl edit --full k3s.service
+# Add --disable=servicelb to ExecStart line
+sudo systemctl daemon-reload
+sudo systemctl restart k3s
+```
+
+**Validation:** Verify servicelb DaemonSet is gone: `kubectl get ds -n kube-system` should NOT show `svclb-*` pods.
+
+### Lesson 3: Pure BGP Mode Required for True ECMP HA
+**Issue:** MetalLB supports both L2 (ARP-based) and BGP modes. L2 mode only provides IP failover (leader election), NOT load balancing. This defeats the HA/ECMP goal.
+
+**Solution:** Use pure BGP mode (no L2Advertisement resources). Configure BGPPeer for each K8s node to peer with upstream router. This enables true ECMP where traffic is load-balanced across all available nodes.
+
+**Validation:**
+- BGP sessions established: `vtysh -c "show ip bgp summary"`
+- ECMP routes visible: `ip route show` shows multiple nexthops
+- Traffic distributes across nodes
+
+### Lesson 4: UDM BGP Configuration Gotchas
+**Issue:** Initial UDM BGP config included `network` statements advertising VIP subnet. This caused routing conflicts and prevented proper ECMP.
+
+**Solution:** UDM should ONLY peer with MetalLB nodes and LEARN routes via BGP. Remove all `network` statements from UDM BGP config. Use route-maps to permit all learned routes (ALLOW-ALL).
+
+**Correct UDM Config Pattern:**
+```
+router bgp 64512
+ neighbor 192.168.1.11 remote-as 64512
+ neighbor 192.168.1.12 remote-as 64512
+ neighbor 192.168.1.13 remote-as 64512
+ !
+ address-family ipv4 unicast
+  neighbor 192.168.1.11 route-map ALLOW-ALL in
+  neighbor 192.168.1.11 route-map ALLOW-ALL out
+  # ... repeat for each neighbor
+  # NO network statements here!
+ exit-address-family
+!
+route-map ALLOW-ALL permit 10
+```
+
+### Lesson 5: Static Routes Required on Local Machines
+**Issue:** Client machines (e.g., MacBook) in the 192.168.1.0/24 network don't automatically know how to reach the VIP subnet 192.168.100.0/24.
+
+**Solution:** Add static route on client machines pointing VIP subnet to UDM gateway:
+```bash
+# macOS
+sudo route -n add -net 192.168.100.0/24 192.168.1.1
+
+# Linux
+sudo ip route add 192.168.100.0/24 via 192.168.1.1
+```
+
+**Alternative:** Configure static route on UDM to be pushed to DHCP clients automatically (cleaner long-term solution).
 
 ---
 
