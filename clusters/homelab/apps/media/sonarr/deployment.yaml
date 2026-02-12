@@ -19,8 +19,16 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      nodeSelector:
-        role: primary
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: role
+                    operator: In
+                    values:
+                      - primary
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
