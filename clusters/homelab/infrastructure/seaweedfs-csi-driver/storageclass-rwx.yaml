@@ -11,3 +11,7 @@ allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 mountOptions:
   - rw
+  - retry=3
+  - connectTimeout=60s
+  - readTimeout=90s
+  - writeTimeout=90s

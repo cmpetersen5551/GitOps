@@ -7,8 +7,8 @@ spec:
   interval: 1m
   path: ./clusters/homelab/apps
   prune: true
-  wait: false  # Temporarily disabled while debugging Sonarr volume mount issues
-  timeout: 5m  # Increased for when we re-enable wait
+  wait: false  # Disabled to prevent reconciliation loops during storage issues
+  timeout: 5m  # Will re-enable wait after verifying mount options fix the issue
   dependsOn:
     - name: infrastructure-metallb
   sourceRef:
