@@ -7,8 +7,8 @@ spec:
   interval: 1m
   path: ./clusters/homelab/apps
   prune: true
-  wait: true
-  timeout: 3m
+  wait: false  # Temporarily disabled while debugging Sonarr volume mount issues
+  timeout: 5m  # Increased for when we re-enable wait
   dependsOn:
     - name: infrastructure-metallb
   sourceRef:
