@@ -10,3 +10,4 @@ resources:
   - helmrelease.yaml
   - storageclass.yaml
   - storageclass-single.yaml
+  - storageclass-rwx.yaml
