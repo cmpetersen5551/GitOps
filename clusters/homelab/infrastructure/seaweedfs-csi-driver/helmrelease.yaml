@@ -17,3 +17,14 @@ spec:
     seaweedfsFiler: "seaweedfs-filer.seaweedfs:8888"
     driver:
       logLevel: info
+    
+    # Increase timeouts for better failover handling
+    node:
+      kubeletRegistrationTimeout: "5m"
+    
+    # Add mount options for better resilience
+    storageClass:
+      seaweedFS:
+        mountOptions:
+          - "retry=3"
+          - "connectTimeout=60s"
