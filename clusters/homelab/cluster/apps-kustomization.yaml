@@ -7,8 +7,8 @@ spec:
   interval: 1m
   path: ./clusters/homelab/apps
   prune: true
-  wait: false  # Disabled to prevent reconciliation loops during storage issues
-  timeout: 5m  # Will re-enable wait after verifying mount options fix the issue
+  wait: true
+  timeout: 3m
   dependsOn:
     - name: infrastructure-metallb
   sourceRef:
