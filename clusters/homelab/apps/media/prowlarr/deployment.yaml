@@ -25,6 +25,13 @@ spec:
                     operator: In
                     values:
                       - primary
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: role
+                    operator: In
+                    values:
+                      - backup
       containers:
         - name: prowlarr
           image: linuxserver/prowlarr@sha256:a82e6d95e0f41ec2383cdbfe89b35384b16bde22eebc8201b98bd9778c2e2062

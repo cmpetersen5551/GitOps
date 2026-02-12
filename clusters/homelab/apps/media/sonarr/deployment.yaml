@@ -29,6 +29,13 @@ spec:
                     operator: In
                     values:
                       - primary
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: role
+                    operator: In
+                    values:
+                      - backup
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
