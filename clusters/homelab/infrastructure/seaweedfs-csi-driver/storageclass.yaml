@@ -2,10 +2,12 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: seaweedfs-ha
+  name: seaweedfs-storage
 provisioner: seaweedfs-csi-driver
 parameters:
   replication: "010"
   diskType: "hdd"
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
+# Default storage class for standard RWO workloads
+isDefault: true
