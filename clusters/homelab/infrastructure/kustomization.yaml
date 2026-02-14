@@ -5,4 +5,4 @@ resources:
   - ./traefik
   - ./storage
   - ./seaweedfs
-  - ./seaweedfs-operator
+  # seaweedfs-operator removed - migrated to direct Helm chart in ./seaweedfs

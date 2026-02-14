@@ -3,7 +3,8 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-  - seaweed.yaml
+  - helmrepository.yaml
+  - helmrelease.yaml
   - ../storage/nfs/pv-nfs-media.yaml
   - ../storage/nfs/pv-nfs-transcode.yaml
 
