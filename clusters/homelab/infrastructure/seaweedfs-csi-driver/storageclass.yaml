@@ -9,5 +9,6 @@ parameters:
   diskType: "hdd"
 allowVolumeExpansion: true
 volumeBindingMode: Immediate
+reclaimPolicy: Retain
 # Default storage class for standard RWO workloads
 isDefault: true

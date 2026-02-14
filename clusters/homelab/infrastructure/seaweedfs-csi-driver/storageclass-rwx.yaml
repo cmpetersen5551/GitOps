@@ -9,6 +9,7 @@ parameters:
   diskType: "hdd"
 allowVolumeExpansion: true
 volumeBindingMode: Immediate
+reclaimPolicy: Retain
 mountOptions:
   - rw
   - retry=3
