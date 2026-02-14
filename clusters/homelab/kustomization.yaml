@@ -6,4 +6,5 @@ resources:
   - cluster/infrastructure-seaweedfs-kustomization.yaml
   - cluster/infrastructure-traefik.yaml
   - cluster/infrastructure-gpu-device-plugin-kustomization.yaml
+  - cluster/infrastructure-descheduler-kustomization.yaml
   - cluster/apps-kustomization.yaml
