@@ -32,8 +32,11 @@ spec:
       defaultReplication: "010"
       volumeSizeLimitMB: 1024
       
-      # Resource configuration
-      resources:
+      # Affinity set to empty string to allow single-node testing
+      affinity: ""
+      
+      # Resource configuration (as string format per chart schema)
+      resources: |
         requests:
           cpu: 250m
           memory: 256Mi
@@ -60,8 +63,11 @@ spec:
         dataCenter: "dc1"
         rack: "proxmox"
         
-        # Resource configuration
-        resources:
+        # Affinity set to empty string to allow single-node testing
+        affinity: ""
+        
+        # Resource configuration (as string format per chart schema)
+        resources: |
           requests:
             cpu: 250m
             memory: 256Mi
@@ -96,8 +102,11 @@ spec:
         dataCenter: "dc1"
         rack: "unraid"
         
-        # Resource configuration
-        resources:
+        # Affinity set to empty string to allow single-node testing
+        affinity: ""
+        
+        # Resource configuration (as string format per chart schema)
+        resources: |
           requests:
             cpu: 250m
             memory: 256Mi
@@ -124,8 +133,11 @@ spec:
       replicas: 1
       defaultReplicaPlacement: "010"
       
-      # Resource configuration
-      resources:
+      # Affinity set to empty string to allow single-node testing
+      affinity: ""
+      
+      # Resource configuration (as string format per chart schema)
+      resources: |
         requests:
           cpu: 250m
           memory: 256Mi
