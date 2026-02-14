@@ -10,7 +10,7 @@ spec:
   # Master servers configuration
   master:
     replicas: 3
-    defaultReplication: "002"  # 3x replication in same rack (interim solution, see Phase 6 note in plan)
+    defaultReplication: "010"  # 2 copies across different zones (Proxmox + Unraid)
     volumeSizeLimitMB: 1024
     limits:
       cpu: 500m
@@ -21,7 +21,7 @@ spec:
 
   # Simple volume server configuration (will support all nodes)
   volume:
-    replicas: 3
+    replicas: 4
     limits:
       cpu: 500m
       memory: 512Mi
@@ -32,19 +32,38 @@ spec:
     # Node selector for volume servers
     nodeSelector:
       sw-volume: "true"
+    # Tolerate GPU taint to allow volume server on w3
+    tolerations:
+      - key: gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
     # Use local-path storage for SeaweedFS volume data (not CSI)
     storageClassName: local-path
-    # Pod anti-affinity to spread volumes across different nodes
+    # Pod anti-affinity to spread volumes across different zones first, then nodes
     affinity:
       podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
-            - key: app.kubernetes.io/component
-              operator: In
-              values:
-              - volume
-          topologyKey: kubernetes.io/hostname
+        preferredDuringSchedulingIgnoredDuringExecution:
+          # Highest priority: spread across zones (Proxmox vs Unraid)
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - volume
+              topologyKey: topology.kubernetes.io/zone
+          # Fallback: spread across different nodes in same zone
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - volume
+              topologyKey: kubernetes.io/hostname
 
   # Filer server configuration
   filer:
