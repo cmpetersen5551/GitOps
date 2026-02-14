@@ -84,9 +84,9 @@ spec:
         dataDirs:
           - name: data
             type: "persistentVolumeClaim"
-            size: "150Gi"
+            size: "100Gi"
             storageClass: "local-path"
-            maxVolumes: 150
+            maxVolumes: 100
       
       # Unraid zone - 1 volume server (k3s-w2)
       unraid:
