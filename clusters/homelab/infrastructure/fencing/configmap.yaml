@@ -53,6 +53,28 @@ data:
             log("No NotReady nodes past threshold. Exiting.")
             return
 
+        # Force-delete stuck Terminating pods on dead nodes
+        for pod in core.list_pod_for_all_namespaces().items:
+            if pod.status.phase != "Terminating":
+                continue
+            node_name = pod.spec.node_name
+            if node_name not in dead_nodes:
+                continue
+            log(
+                f"Force-deleting stuck pod {pod.metadata.namespace}/{pod.metadata.name} "
+                f"on node {node_name}"
+            )
+            if not DRY_RUN:
+                core.delete_namespaced_pod(
+                    pod.metadata.name,
+                    pod.metadata.namespace,
+                    grace_period_seconds=0,
+                    propagation_policy="Foreground",
+                )
+                log(
+                    f"Force-deleted pod {pod.metadata.namespace}/{pod.metadata.name}"
+                )
+
         pods_by_pvc = {}
         for pod in core.list_pod_for_all_namespaces().items:
             if pod.status.phase != "Pending":
