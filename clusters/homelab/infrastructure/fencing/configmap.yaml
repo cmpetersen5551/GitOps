@@ -64,11 +64,14 @@ data:
                 pods_by_pvc.setdefault(key, []).append(pod)
 
         for va in storage.list_volume_attachment().items:
-            if not va.status or not va.status.attached:
-                continue
             node_name = va.spec.node_name
             if node_name not in dead_nodes:
                 continue
+            # Target both attached and unattached (stuck) VolumeAttachments
+            if va.status and va.status.attached:
+                log_status = "attached=true"
+            else:
+                log_status = "attached=false (stuck)"
             pv_name = va.spec.source.persistent_volume_name
             if not pv_name:
                 continue
@@ -92,7 +95,8 @@ data:
             log(
                 "Fencing volume: VA="
                 f"{va.metadata.name} pv={pv_name} pvc={pvc_key} "
-                f"node={node_name} notready_seconds={dead_nodes[node_name]}"
+                f"node={node_name} notready_seconds={dead_nodes[node_name]} "
+                f"status={log_status}"
             )
             if DRY_RUN:
                 log("Dry run enabled. Skipping delete.")
