@@ -8,7 +8,8 @@ parameters:
   replication: "010"
   diskType: "hdd"
 allowVolumeExpansion: true
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
+# Volume binding delayed until pod scheduled - enables proper topology awareness for HA failover
 reclaimPolicy: Retain
-# Default storage class for standard RWO workloads
+# Default storage class for standard RWO workloads  
 isDefault: true
