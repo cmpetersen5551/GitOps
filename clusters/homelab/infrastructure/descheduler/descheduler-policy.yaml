@@ -21,6 +21,6 @@ data:
               evictSystemCriticalPods: false
               nodeFit: true
         plugins:
-          balance:
+          deschedule:
             enabled:
               - "RemovePodsViolatingNodeAffinity"
