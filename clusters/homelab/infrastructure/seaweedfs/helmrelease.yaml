@@ -74,8 +74,8 @@ spec:
           topology.kubernetes.io/zone: proxmox
           sw-volume: "true"
         
-        # Tolerate GPU taint on k3s-w3
-        tolerations:
+        # Tolerate GPU taint on k3s-w3 (as string, not object)
+        tolerations: |
           - key: gpu
             operator: Equal
             value: "true"
