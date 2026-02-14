@@ -35,8 +35,8 @@ spec:
       # Affinity set to empty string to allow single-node testing
       affinity: ""
       
-      # Resource configuration (as string format per chart schema)
-      resources: |
+      # Resource configuration
+      resources:
         requests:
           cpu: 250m
           memory: 256Mi
@@ -66,8 +66,8 @@ spec:
         # Affinity set to empty string to allow single-node testing
         affinity: ""
         
-        # Resource configuration (as string format per chart schema)
-        resources: |
+        # Resource configuration
+        resources:
           requests:
             cpu: 250m
             memory: 256Mi
@@ -105,8 +105,8 @@ spec:
         # Affinity set to empty string to allow single-node testing
         affinity: ""
         
-        # Resource configuration (as string format per chart schema)
-        resources: |
+        # Resource configuration
+        resources:
           requests:
             cpu: 250m
             memory: 256Mi
@@ -136,8 +136,8 @@ spec:
       # Affinity set to empty string to allow single-node testing
       affinity: ""
       
-      # Resource configuration (as string format per chart schema)
-      resources: |
+      # Resource configuration
+      resources:
         requests:
           cpu: 250m
           memory: 256Mi
