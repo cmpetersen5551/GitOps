@@ -14,5 +14,4 @@ spec:
   path: ./clusters/homelab/infrastructure/seaweedfs
   prune: true
   wait: true
-  dependsOn:
-    - name: infrastructure-seaweedfs-operator
+  # dependsOn removed - no longer using operator
