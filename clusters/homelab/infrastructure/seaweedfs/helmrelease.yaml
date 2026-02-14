@@ -29,9 +29,8 @@ spec:
     master:
       enabled: true
       replicas: 3
-      port: 9333
-      grpcPort: 19333
-      metricsPort: 9327
+      defaultReplication: "010"
+      volumeSizeLimitMB: 1024
       
       # Resource configuration
       resources:
@@ -42,32 +41,11 @@ spec:
           cpu: 500m
           memory: 512Mi
       
-      # Master-specific settings
-      config: |
-        # Replication is number of copies we maintain beyond the original
-        # 010 = 1 copy on different rack in same DC (2 total copies)
-        defaultReplication = "010"
-        volumeSizeLimitMB = 1024
-      
       # Data persistence for Raft consensus
       data:
         type: "persistentVolumeClaim"
         size: "2Gi"
         storageClass: "local-path"
-      
-      # Spread masters across nodes
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app.kubernetes.io/component
-                      operator: In
-                      values:
-                        - master
-                topologyKey: kubernetes.io/hostname
     
     # Disable single volume configuration (we use volumes: plural)
     volume:
@@ -79,11 +57,6 @@ spec:
       proxmox:
         enabled: true
         replicas: 2
-        port: 8080
-        grpcPort: 18080
-        metricsPort: 9327
-        
-        # Topology configuration for replication
         dataCenter: "dc1"
         rack: "proxmox"
         
@@ -96,9 +69,9 @@ spec:
             cpu: 500m
             memory: 512Mi
         
-        # Node selector to pin to proxmox zone
-        nodeSelector:
-          topology.kubernetes.io/zone: "proxmox"
+        # Node selector to pin to proxmox zone (as string, not object)
+        nodeSelector: |
+          topology.kubernetes.io/zone: proxmox
           sw-volume: "true"
         
         # Tolerate GPU taint on k3s-w3
@@ -120,11 +93,6 @@ spec:
       unraid:
         enabled: true
         replicas: 1
-        port: 8080
-        grpcPort: 18080
-        metricsPort: 9327
-        
-        # Topology configuration for replication
         dataCenter: "dc1"
         rack: "unraid"
         
@@ -137,9 +105,9 @@ spec:
             cpu: 500m
             memory: 512Mi
         
-        # Node selector to pin to unraid zone
-        nodeSelector:
-          topology.kubernetes.io/zone: "unraid"
+        # Node selector to pin to unraid zone (as string, not object)
+        nodeSelector: |
+          topology.kubernetes.io/zone: unraid
           sw-volume: "true"
         
         # Data directories configuration
@@ -154,9 +122,7 @@ spec:
     filer:
       enabled: true
       replicas: 1
-      port: 8888
-      grpcPort: 18888
-      metricsPort: 9327
+      defaultReplicaPlacement: "010"
       
       # Resource configuration
       resources:
@@ -176,7 +142,6 @@ spec:
       # S3 API enablement
       s3:
         enabled: true
-        port: 8333
         enableAuth: false
       
       # Data persistence for filer metadata
@@ -184,13 +149,3 @@ spec:
         type: "persistentVolumeClaim"
         size: "2Gi"
         storageClass: "local-path"
-      
-      # IAM for S3 compatibility
-      extraVolumes:
-        - name: config
-          configMap:
-            name: seaweedfs-filer-config
-      
-      extraVolumeMounts:
-        - name: config
-          mountPath: /etc/seaweedfs
