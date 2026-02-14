@@ -19,9 +19,9 @@ spec:
       cpu: 250m
       memory: 256Mi
 
-  # Simple volume server configuration (will support all nodes)
+  # Simple volume server configuration (worker nodes only)
   volume:
-    replicas: 4
+    replicas: 3
     limits:
       cpu: 500m
       memory: 512Mi
