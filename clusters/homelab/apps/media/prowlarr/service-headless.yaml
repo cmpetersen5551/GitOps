@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr-headless
+  namespace: media
+  labels:
+    app: prowlarr
+spec:
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    app: prowlarr
+  ports:
+    - port: 9696
+      targetPort: 9696
+      protocol: TCP
+      name: http

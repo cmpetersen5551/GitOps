@@ -56,10 +56,10 @@ spec:
     
     # Multi-zone volume server configuration with rack/datacenter topology
     volumes:
-      # Proxmox zone - 2 volume servers (k3s-w1, k3s-w3)
+      # Proxmox zone - 1 volume server (k3s-w1 only)
       proxmox:
         enabled: true
-        replicas: 2
+        replicas: 1
         dataCenter: "dc1"
         rack: "proxmox"
         
@@ -75,25 +75,18 @@ spec:
             cpu: 500m
             memory: 512Mi
         
-        # Node selector to pin to proxmox zone (as string, not object)
+        # Pin to k3s-w1 only (removed w3 from storage topology)
         nodeSelector: |
-          topology.kubernetes.io/zone: proxmox
+          kubernetes.io/hostname: k3s-w1
           sw-volume: "true"
-        
-        # Tolerate GPU taint on k3s-w3 (as string, not object)
-        tolerations: |
-          - key: gpu
-            operator: Equal
-            value: "true"
-            effect: NoSchedule
         
         # Data directories configuration
         dataDirs:
           - name: data
             type: "persistentVolumeClaim"
-            size: "100Gi"
+            size: "150Gi"
             storageClass: "local-path"
-            maxVolumes: 100
+            maxVolumes: 150
       
       # Unraid zone - 1 volume server (k3s-w2)
       unraid:
@@ -114,9 +107,9 @@ spec:
             cpu: 500m
             memory: 512Mi
         
-        # Node selector to pin to unraid zone (as string, not object)
+        # Pin to k3s-w2 only
         nodeSelector: |
-          topology.kubernetes.io/zone: unraid
+          kubernetes.io/hostname: k3s-w2
           sw-volume: "true"
         
         # Data directories configuration
