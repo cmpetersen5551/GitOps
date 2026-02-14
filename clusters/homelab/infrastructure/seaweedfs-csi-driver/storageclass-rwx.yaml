@@ -8,7 +8,7 @@ parameters:
   replication: "010"
   diskType: "hdd"
 allowVolumeExpansion: true
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Retain
 mountOptions:
   - rw
