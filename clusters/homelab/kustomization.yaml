@@ -7,4 +7,5 @@ resources:
   - cluster/infrastructure-traefik.yaml
   - cluster/infrastructure-gpu-device-plugin-kustomization.yaml
   - cluster/infrastructure-descheduler-kustomization.yaml
+  - cluster/infrastructure-fencing-kustomization.yaml
   - cluster/apps-kustomization.yaml
