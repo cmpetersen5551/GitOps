@@ -4,6 +4,7 @@ resources:
   - ./metallb
   - ./traefik
   - ./storage
+  - ./longhorn
   - ./fencing
   # seaweedfs removed - migrating to Longhorn
   # seaweedfs-operator removed - migrated to direct Helm chart in ./seaweedfs

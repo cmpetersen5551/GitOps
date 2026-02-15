@@ -1,0 +1,125 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: longhorn
+  namespace: longhorn-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: longhorn
+      version: "1.7.x"
+      sourceRef:
+        kind: HelmRepository
+        name: longhorn
+        namespace: longhorn-system
+  values:
+    # Persistence settings for 2-node HA
+    persistence:
+      defaultClass: true
+      defaultClassReplicaCount: 2  # 2 replicas for 2-node HA
+      defaultDataLocality: best-effort  # Try to keep replica on same node as workload
+      reclaimPolicy: Retain
+      migratable: true  # Enable live migration
+      recurringJobSelector:
+        enable: false
+      defaultFsType: ext4
+      defaultMkfsParams: ""
+      defaultNodeSelector:
+        enable: true
+        selector: "node.longhorn.io/storage=enabled"  # Only w1 and w2
+      defaultDiskSelector:
+        enable: false
+        selector: ""
+      
+    # CSI settings
+    csi:
+      attacherReplicaCount: 2
+      provisionerReplicaCount: 2
+      resizerReplicaCount: 2
+      snapshotterReplicaCount: 2
+      
+    # System default settings
+    defaultSettings:
+      # Replica settings
+      defaultReplicaCount: 2
+      replicaSoftAntiAffinity: false  # CRITICAL: Must be false for 2-node
+      replicaAutoBalance: least-effort  # Balance replicas across nodes
+      
+      # Node and disk settings
+      createDefaultDiskLabeledNodes: true
+      defaultDataPath: /var/lib/longhorn
+      defaultDataLocality: best-effort
+      
+      # Storage settings - adjust for production
+      storageOverProvisioningPercentage: 100
+      storageMinimalAvailablePercentage: 10
+      
+      # Node failure handling
+      nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+      nodeDrainPolicy: block-if-contains-last-replica
+      autoDeletePodWhenVolumeDetachedUnexpectedly: true
+      
+      # Scheduling settings
+      disableSchedulingOnCordonedNode: true
+      replicaZoneSoftAntiAffinity: false  # We only have one zone per node
+      
+      # Performance settings
+      guaranteedInstanceManagerCPU: 12  # 12% CPU reserved per instance manager
+      concurrentReplicaRebuildPerNodeLimit: 2
+      
+      # System settings
+      upgradeChecker: true
+      v1DataEngine: true
+      v2DataEngine: false  # Stick with stable V1
+      
+      # Backup settings (optional - configure later)
+      backupTarget: ""
+      backupTargetCredentialSecret: ""
+      
+    # Longhorn Manager settings
+    longhornManager:
+      priorityClass: longhorn-critical
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: "enabled"
+          effect: NoSchedule
+      nodeSelector:
+        node.longhorn.io/storage: "enabled"
+      
+    # Longhorn Driver settings
+    longhornDriver:
+      priorityClass: longhorn-critical
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: "enabled"
+          effect: NoSchedule
+      nodeSelector: {}  # CSI driver needs to run on all nodes
+      
+    # Longhorn UI settings
+    longhornUI:
+      replicas: 1  # Only need 1 for homelab
+      priorityClass: longhorn-critical
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: "enabled"
+          effect: NoSchedule
+      nodeSelector:
+        node.longhorn.io/storage: "enabled"
+      
+    # Image settings (use defaults)
+    image:
+      pullPolicy: IfNotPresent
+      
+    # Service settings
+    service:
+      ui:
+        type: ClusterIP
+        nodePort: null
+      manager:
+        type: ClusterIP
+        nodePort: null
