@@ -6,3 +6,4 @@ resources:
   - iscsi-installer.yaml  # Install prerequisites first
   - helmrepository.yaml
   - helmrelease.yaml
+  - storageclass-simple.yaml  # Custom StorageClass without node selectors

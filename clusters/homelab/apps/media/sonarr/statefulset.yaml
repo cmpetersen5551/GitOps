@@ -115,7 +115,7 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: longhorn  # Migrated to Longhorn for 2-node HA
+        storageClassName: longhorn-simple  # Custom StorageClass without node selectors
         resources:
           requests:
             storage: 5Gi
