@@ -115,7 +115,7 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: seaweedfs-storage
+        storageClassName: longhorn  # Migrated to Longhorn for 2-node HA
         resources:
           requests:
             storage: 5Gi
