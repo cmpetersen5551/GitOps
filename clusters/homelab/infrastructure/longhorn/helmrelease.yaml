@@ -27,8 +27,8 @@ spec:
       defaultFsType: ext4
       defaultMkfsParams: ""
       defaultNodeSelector:
-        enable: true
-        selector: "node.longhorn.io/storage=enabled"  # Only w1 and w2
+        enable: false  # Disable for now, will use node tags in Longhorn
+        selector: ""
       defaultDiskSelector:
         enable: false
         selector: ""
