@@ -12,14 +12,24 @@ This document provides essential context for AI assistants working with this Git
 
 ## Critical Architecture Decisions
 
-### HA Strategy (Longhorn-First, Minimal Components)
-**Philosophy**: Rock-solid foundation with minimal complexity. Use Longhorn's built-in HA rather than external tools.
-- ✅ **Longhorn Pod Deletion Policy**: Automatically force-deletes stuck pods on failed nodes → Kubernetes reschedules on healthy node → Longhorn reattaches volume
+### HA Strategy (Active-Passive with Automatic Failback)
+**Philosophy**: Rock-solid foundation with minimal complexity. w1 is primary, w2 is failover.
+
+**Active-Passive Components:**
+- ✅ **Node Labels**: w1 labeled `node.longhorn.io/primary=true`, w2 labeled `primary=false`
+- ✅ **Pod Affinity**: StatefulSets use `preferredDuringScheduling` to prefer w1
+- ✅ **Descheduler**: Automatically migrates pods back to w1 when w1 recovers
+  - Runs every 5 minutes via CronJob
+  - Uses `RemovePodsViolatingNodeAffinity` strategy
+  - Evicts pods on w2 when w1 is available → Kubernetes reschedules to w1
+- ✅ **Longhorn Pod Deletion Policy**: Fast failover from w1→w2 when w1 fails
+  - `nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod`
+  - Automatically force-deletes stuck pods → Kubernetes reschedules on w2 → Longhorn reattaches volume
 - ✅ **Fencing Cronjob**: Safety layer to prevent split-brain if storage node recovers unexpectedly
-- ❌ **Descheduler**: Removed (not needed for HA goals, adds complexity)
-  - Descheduler is for workload optimization/rebalancing
-  - Our 2-node storage setup doesn't benefit from pod eviction/reshuffling
-  - Longhorn + required node affinity already ensures correct placement
+
+**Failover Flow:**
+1. w1 fails → Longhorn deletes pod → Pod reschedules to w2 (~60s)
+2. w1 recovers → Longhorn rebuilds replica → Descheduler evicts pod from w2 → Pod returns to w1 (~5min)
 
 ### Storage (HA-First Design)
 - **Primary**: Longhorn 2-node HA (w1, w2) for configs and critical workloads
@@ -41,11 +51,12 @@ This document provides essential context for AI assistants working with this Git
 Node labels and taints are infrastructure configuration applied manually, documented in `docs/LONGHORN_NODE_SETUP.md`:
 ```bash
 # Storage nodes (w1, w2) require:
-kubectl label node k3s-w1 node.longhorn.io/storage=enabled node.longhorn.io/create-default-disk=true
-kubectl taint node k3s-w1 node.longhorn.io/storage=enabled:NoSchedule --overwrite
+kubectl label node k3s-w1 node.longhorn.io/storage=enabled node.longhorn.io/create-default-disk=true node.longhorn.io/primary=true
+kubectl label node k3s-w2 node.longhorn.io/storage=enabled node.longhorn.io/create-default-disk=true node.longhorn.io/primary=false
+kubectl taint node k3s-w1 k3s-w2 node.longhorn.io/storage=enabled:NoSchedule --overwrite
 ```
 
-**Key Learning**: The `create-default-disk=true` label is REQUIRED for Longhorn disk auto-creation; the other controls nodeSelector and taint behavior.
+**Key Learning**: The `create-default-disk=true` label is REQUIRED for Longhorn disk auto-creation. The `primary` label enables active-passive HA with automatic failback via descheduler.
 
 ## Essential Commands
 
@@ -131,10 +142,13 @@ docs/                            # Documentation root
    - Longhorn is simpler, Kubernetes-native, zero-copy failover
    - Research before committing to storage backend
 
-3. **Fencing vs. Descheduler Decision** (Why We Removed Descheduler)
+3. **Fencing vs. Descheduler Decision** (Why We Removed Descheduler, Then Brought It Back)
    - **Fencing**: Keep it. Provides critical safety layer against split-brain when failed node recovers.
-   - **Descheduler**: Removed. Designed for workload optimization/rebalancing, not HA failover. Longhorn's `nodeDownPodDeletionPolicy` provides pod-level failover. No benefit for dedicated 2-node storage setup.
-   - **Lesson**: Choose components based on what you actually need, not what "sounds good". Minimal complexity = best foundation.
+   - **Descheduler**: Initially removed, then restored for active-passive HA with automatic failback.
+     - **Why removed**: Not needed for initial failover (Longhorn handles that)
+     - **Why restored**: Essential for automatic failback to primary node (w1) when it recovers
+     - **How it works**: Detects pods violating `preferredDuringScheduling` affinity, evicts them, Kubernetes reschedules to preferred node
+   - **Lesson**: Descheduler serves a specific purpose - automatic workload rebalancing to preferred nodes. Not needed for failover, but critical for failback in active-passive setups.
 
 4. **GitOps Discipline**
    - ✅ All application + infrastructure configs in Git via Flux
