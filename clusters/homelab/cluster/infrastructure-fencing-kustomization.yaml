@@ -12,6 +12,5 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  dependsOn:
-    - name: infrastructure-seaweedfs-csi-driver
+  # SeaweedFS removed - no dependencies
       namespace: flux-system
