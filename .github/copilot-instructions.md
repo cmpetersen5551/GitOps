@@ -12,11 +12,21 @@ This document provides essential context for AI assistants working with this Git
 
 ## Critical Architecture Decisions
 
+### HA Strategy (Longhorn-First, Minimal Components)
+**Philosophy**: Rock-solid foundation with minimal complexity. Use Longhorn's built-in HA rather than external tools.
+- ✅ **Longhorn Pod Deletion Policy**: Automatically force-deletes stuck pods on failed nodes → Kubernetes reschedules on healthy node → Longhorn reattaches volume
+- ✅ **Fencing Cronjob**: Safety layer to prevent split-brain if storage node recovers unexpectedly
+- ❌ **Descheduler**: Removed (not needed for HA goals, adds complexity)
+  - Descheduler is for workload optimization/rebalancing
+  - Our 2-node storage setup doesn't benefit from pod eviction/reshuffling
+  - Longhorn + required node affinity already ensures correct placement
+
 ### Storage (HA-First Design)
 - **Primary**: Longhorn 2-node HA (w1, w2) for configs and critical workloads
   - 2 replicas per volume (one on each storage node)
   - `replicaSoftAntiAffinity: false` (required for 2-node)
   - Zero-copy failover between nodes
+  - `nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod` (enables fast failover)
   
 - **Secondary**: NFS on Unraid (SPOF, acceptable for media/transcode)
   - Media library: ro access from all nodes
@@ -121,7 +131,12 @@ docs/                            # Documentation root
    - Longhorn is simpler, Kubernetes-native, zero-copy failover
    - Research before committing to storage backend
 
-3. **GitOps Discipline**
+3. **Fencing vs. Descheduler Decision** (Why We Removed Descheduler)
+   - **Fencing**: Keep it. Provides critical safety layer against split-brain when failed node recovers.
+   - **Descheduler**: Removed. Designed for workload optimization/rebalancing, not HA failover. Longhorn's `nodeDownPodDeletionPolicy` provides pod-level failover. No benefit for dedicated 2-node storage setup.
+   - **Lesson**: Choose components based on what you actually need, not what "sounds good". Minimal complexity = best foundation.
+
+4. **GitOps Discipline**
    - ✅ All application + infrastructure configs in Git via Flux
    - 🔶 Node infrastructure (labels/taints) outside Git, documented in NODE_SETUP.md
    - Rationale: Infrastructure rarely changes; GitOps works best for deployment manifests

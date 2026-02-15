@@ -4,5 +4,4 @@ resources:
   - ./metallb       # BGP load balancer for external IPs
   - ./storage       # NFS mounts (Unraid)
   - ./longhorn      # HA storage (2-node replication)
-  - ./descheduler   # Pod eviction for node maintenance
   - ./fencing       # Volume-fencing cronjob for HA failover
