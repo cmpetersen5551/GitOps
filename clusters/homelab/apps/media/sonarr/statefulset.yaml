@@ -50,8 +50,12 @@ spec:
                     operator: In
                     values:
                       - backup
-      # Tolerations: Allow scheduling on w2 despite PreferNoSchedule taint
+      # Tolerations: Allow scheduling on Longhorn storage nodes and w2 backup
       tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
         - key: role
           operator: Equal
           value: backup
