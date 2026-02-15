@@ -1,11 +1,29 @@
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
+  name: traefik-vip
+  namespace: metallb-system
+spec:
+  addresses:
+  - 192.168.100.100/32
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
   name: default
   namespace: metallb-system
 spec:
   addresses:
-  - 192.168.254.10-192.168.254.98
+  - 192.168.100.101-192.168.100.110
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: traefik-vip
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - traefik-vip
 ---
 apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement

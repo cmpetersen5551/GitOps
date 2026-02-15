@@ -1,0 +1,9 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - iscsi-installer.yaml  # Install prerequisites first
+  - helmrepository.yaml
+  - helmrelease.yaml
+  - storageclass-simple.yaml  # Custom StorageClass without node selectors

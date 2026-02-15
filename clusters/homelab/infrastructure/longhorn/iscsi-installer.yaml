@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: longhorn-iscsi-installer
+  namespace: longhorn-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: longhorn-iscsi-installer
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: longhorn-iscsi-installer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: longhorn-iscsi-installer
+subjects:
+  - kind: ServiceAccount
+    name: longhorn-iscsi-installer
+    namespace: longhorn-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: longhorn-iscsi-installer
+  namespace: longhorn-system
+  labels:
+    app: longhorn-iscsi-installer
+spec:
+  selector:
+    matchLabels:
+      app: longhorn-iscsi-installer
+  template:
+    metadata:
+      labels:
+        app: longhorn-iscsi-installer
+    spec:
+      serviceAccountName: longhorn-iscsi-installer
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
+      nodeSelector:
+        node.longhorn.io/storage: "enabled"  # Only w1 and w2
+      tolerations:
+        - operator: Exists
+      initContainers:
+        - name: iscsi-installer
+          image: debian:bookworm-slim
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Installing open-iscsi on host..."
+              chroot /host /bin/bash -c "
+                apt-get update && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y open-iscsi && \
+                systemctl enable iscsid && \
+                systemctl start iscsid && \
+                modprobe iscsi_tcp
+              "
+              echo "open-iscsi installed successfully!"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      containers:
+        - name: pause
+          image: gcr.io/google_containers/pause:3.1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+            limits:
+              cpu: 10m
+              memory: 10Mi
+      volumes:
+        - name: host
+          hostPath:
+            path: /
