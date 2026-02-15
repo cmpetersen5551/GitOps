@@ -6,3 +6,4 @@ resources:
   - ./storage       # NFS mounts (Unraid)
   - ./longhorn      # HA storage (2-node replication)
   - ./fencing       # Volume-fencing cronjob for HA failover
+  - ./descheduler   # Automatic failback to primary node (active-passive HA)

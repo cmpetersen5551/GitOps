@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - descheduler-policy.yaml
+  - descheduler-rbac.yaml
+  - descheduler-cronjob.yaml
