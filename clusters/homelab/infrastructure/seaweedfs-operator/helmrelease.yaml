@@ -1,6 +1,0 @@
----
-# Migrated to direct Helm chart in seaweedfs/ directory
-# This operator-based deployment is being replaced with upstream SeaweedFS Helm chart
-# for proper topology configuration (rack/datacenter awareness)
-#
-# See: /clusters/homelab/infrastructure/seaweedfs/ for new deployment
