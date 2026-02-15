@@ -1,9 +1,0 @@
----
-apiVersion: source.toolkit.fluxcd.io/v1beta2
-kind: HelmRepository
-metadata:
-  name: seaweedfs
-  namespace: seaweedfs
-spec:
-  interval: 1h
-  url: https://seaweedfs.github.io/seaweedfs/helm
