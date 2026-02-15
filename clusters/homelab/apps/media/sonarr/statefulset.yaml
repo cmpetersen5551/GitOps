@@ -25,9 +25,16 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      # Node affinity: Prefer w1 (primary), allow w2 (backup) as failover
+      # Node affinity: REQUIRE storage nodes (w1/w2), prefer primary
       affinity:
         nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100  # Highest weight for primary node
               preference:
