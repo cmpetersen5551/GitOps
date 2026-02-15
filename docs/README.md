@@ -37,6 +37,13 @@
   - Testing changes safely
   - Common anti-patterns to avoid
 
+### 🔗 Cluster-Specific Infrastructure
+
+Located in `clusters/homelab/docs/` (co-located with infrastructure code):
+- **[BGP-TROUBLESHOOTING.md](../clusters/homelab/docs/BGP-TROUBLESHOOTING.md)** - UDM/FRR route installation debugging
+- **[METALLB-BGP-UNIFI-RESEARCH.md](../clusters/homelab/docs/METALLB-BGP-UNIFI-RESEARCH.md)** - MetalLB BGP config with UniFi UDM
+- **[UDM-BGP-CONFIG.conf](../clusters/homelab/docs/UDM-BGP-CONFIG.conf)** - UDM FRR configuration example
+
 ---
 
 ## Archive
@@ -96,25 +103,36 @@ flux get kustomizations -w
 | **Check cluster health** | CLUSTER_STATE_SUMMARY.md |
 | **Add new workloads** | GITOPS_BEST_PRACTICES.md |
 | **Configure NFS mounts** | NFS_STORAGE.md |
+| **Debug BGP/MetalLB** | [clusters/homelab/docs/BGP-TROUBLESHOOTING.md](../clusters/homelab/docs/BGP-TROUBLESHOOTING.md) |
+| **Configure BGP load balancer** | [clusters/homelab/docs/METALLB-BGP-UNIFI-RESEARCH.md](../clusters/homelab/docs/METALLB-BGP-UNIFI-RESEARCH.md) |
 | **Debug issues** | LONGHORN_HA_MIGRATION.md (Troubleshooting section) |
 
 ---
 
 ## Documentation Philosophy
 
-✅ **What's Here**:
+✅ **What's Here** (`/docs/`):
 - Operational run-books for common tasks
-- Architecture decisions and their rationale
+- General architecture decisions and their rationale
 - Troubleshooting procedures
 - Design patterns and best practices
 - Lessons learned from implementations
+- **Portable across clusters**
+
+✅ **What's in `clusters/homelab/docs/`**:
+- Cluster-specific infrastructure setup (BGP, MetalLB, UDM)
+- Environment-specific configurations
+- Co-located with infrastructure code for maintainability
 
 🔶 **What's NOT Here**:
 - Kubernetes API reference (see upstream docs)
 - Longhorn tuning parameters (see Longhorn docs)
 - k3s installation (see k3s docs)
 
-**Philosophy**: This documentation captures *decision context* and *operational knowledge specific to this cluster*. It complements (not replaces) upstream documentation.
+**Philosophy**: 
+- Root `/docs/` captures *portable decision context* and *operational knowledge*
+- `clusters/homelab/docs/` captures *cluster-specific infrastructure* configurations
+- Documentation complements (not replaces) upstream documentation
 
 ---
 
