@@ -43,16 +43,12 @@ spec:
                     operator: In
                     values:
                       - "true"
-      # Tolerations: Allow scheduling on Longhorn storage nodes and w2 backup
+      # Tolerations: Allow scheduling on Longhorn storage nodes
       tolerations:
         - key: node.longhorn.io/storage
           operator: Equal
           value: enabled
           effect: NoSchedule
-        - key: role
-          operator: Equal
-          value: backup
-          effect: PreferNoSchedule
         # Faster failover: Evict after 30 seconds instead of default 5 minutes
         - key: node.kubernetes.io/unreachable
           operator: Exists
