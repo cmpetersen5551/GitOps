@@ -25,7 +25,7 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      # Node affinity: REQUIRE storage nodes (w1/w2), prefer primary
+      # Node affinity: REQUIRE storage nodes (w1/w2), STRONGLY prefer w1 primary
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -36,20 +36,13 @@ spec:
                     values:
                       - enabled
           preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100  # Highest weight for primary node
+            - weight: 100  # Strongly prefer primary node (w1) for active-passive
               preference:
                 matchExpressions:
-                  - key: workload-priority
+                  - key: node.longhorn.io/primary
                     operator: In
                     values:
-                      - primary
-            - weight: 10   # Low weight for backup (only if primary unavailable)
-              preference:
-                matchExpressions:
-                  - key: workload-priority
-                    operator: In
-                    values:
-                      - backup
+                      - "true"
       # Tolerations: Allow scheduling on Longhorn storage nodes and w2 backup
       tolerations:
         - key: node.longhorn.io/storage
