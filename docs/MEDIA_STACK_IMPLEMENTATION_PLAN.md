@@ -56,7 +56,7 @@
     storageClassName: nfs-unraid
     resources:
       requests:
-        storage: 500Gi  # Temporary transcode space
+        storage: 200Gi  # Temporary transcode space
   ```
 - Add Longhorn PVC for symlink library (read-write, shared by Decypharr/Sonarr/Radarr/Plex):
   ```yaml
@@ -72,6 +72,92 @@
     resources:
       requests:
         storage: 100Mi  # Symlinks only (~KB per symlink, even 10k shows is <50MB)
+  ```
+- Add Longhorn PVCs for each app's config storage:
+  ```yaml
+  # config-sonarr
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-sonarr
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 10Gi
+  ---
+  # config-radarr
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-radarr
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 10Gi
+  ---
+  # config-prowlarr
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-prowlarr
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 5Gi
+  ---
+  # config-profilarr
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-profilarr
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 2Gi
+  ---
+  # config-decypharr
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-decypharr
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 5Gi
+  ---
+  # config-plex
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: config-plex
+    namespace: media
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn-simple
+    resources:
+      requests:
+        storage: 50Gi
   ```
 
 **Note on Longhorn RWX**: This creates a dedicated NFSv4 share-manager pod in `longhorn-system` namespace that exposes the volume via NFS. Adds ~10-30% overhead vs direct block storage, but provides HA failover for the symlink library.
@@ -91,7 +177,8 @@ parameters:
 
 **Verification**: 
 - `sops -d test-secret.yaml` works (outputs plaintext)
-- `kubectl get pvc -n media | grep -E "nfs|streaming"` shows all three PVCs bound
+- `kubectl get pvc -n media` shows all PVCs bound (media-library, transcode-cache, symlink-library, config-* PVCs)
+- `kubectl get storageclass longhorn-rwx longhorn-simple` shows both StorageClasses ready
 
 ---
 
@@ -292,7 +379,7 @@ spec:
             - name: dfs-mount
               mountPath: /mnt/dfs
               mountPropagation: Bidirectional  # CRITICAL for FUSE sharing
-            - name: streaming-media
+            - name: symlink-library
               mountPath: /mnt/streaming-media    # Where symlinks are created
           securityContext:
             privileged: true  # REQUIRED for FUSE mount creation
@@ -372,8 +459,23 @@ spec:
 ```
 
 **Services & Ingress**:
-- ClusterIP Service on port 8080 named `decypharr` (API)
-- ClusterIP Service on port 2049 named `decypharr-nfs` (NFS export for remote transcoding)
+- ClusterIP Service on port 8080 named `decypharr` (API):
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: decypharr
+    namespace: media
+  spec:
+    selector:
+      app: decypharr
+    ports:
+      - port: 8080
+        targetPort: 8080
+        protocol: TCP
+        name: api
+  ```
+- ClusterIP Service on port 2049 named `decypharr-nfs` (NFS export for remote transcoding):
   ```yaml
   apiVersion: v1
   kind: Service
@@ -474,9 +576,11 @@ volumes:
 **Add volume mounts to Sonarr container** for all media paths:
 ```yaml
 volumeMounts:
+  - name: config
+    mountPath: /config
   - name: dfs-mount
     mountPath: /mnt/dfs
-  - name: streaming-media
+  - name: symlink-library
     mountPath: /mnt/streaming-media
   - name: media
     mountPath: /mnt/media
@@ -523,21 +627,12 @@ spec:
                     values: ["true"]  # Prefer w1
 ```
 
-**Add volume mounts to Sonarr container**:
-```yaml
-volumeMounts:
-  - name: dfs-mount
-    mountPath: /mnt/dfs
-  - name: streaming-media
-    mountPath: /mnt/streaming-media
-  - name: media
-    mountPath: /mnt/media
-    readOnly: true
-```
-
-**Add volumes**:
+**Add volumes** (complete list including config):
 ```yaml
 volumes:
+  - name: config
+    persistentVolumeClaim:
+      claimName: config-sonarr
   - name: dfs-mount
     hostPath:
       path: /mnt/k8s/decypharr-dfs
@@ -545,6 +640,9 @@ volumes:
   - name: symlink-library
     persistentVolumeClaim:
       claimName: symlink-library
+  - name: media
+    persistentVolumeClaim:
+      claimName: media-library
 ```
 
 #### 9. Update Radarr StatefulSet (*same pattern as Sonarr, with streaming-stack affinity*)
@@ -776,7 +874,7 @@ spec:
               mountPath: /mnt/dfs
               readOnly: true
               mountPropagation: Bidirectional
-            - name: streaming-media
+            - name: symlink-library
               mountPath: /mnt/streaming-media
             - name: transcode
               mountPath: /transcode
@@ -1379,7 +1477,7 @@ Sonarr Shows:
 
 ---
 
-### Gotcha 1: rclone NFS Sidecar is the Primary Mitigation for Cross-Node Access
+### Gotcha 2: rclone NFS Sidecar is the Primary Mitigation for Cross-Node Access
 
 **Problem Solved**: 
 - FUSE mounts are process-specific and per-node (can't cross nodes)
@@ -1431,7 +1529,7 @@ kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
 # Symlinks continue working throughout migration (NFS transparent) ✅
 ```
 
-### Gotcha 2: Prowlarr API Chicken-Egg Problem
+### Gotcha 3: Prowlarr API Chicken-Egg Problem
 
 **Problem**: 
 - Prowlarr needs Sonarr/Radarr API keys to configure app sync
@@ -1447,7 +1545,7 @@ kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
 
 **Automation Option (Future)**: Two-phase init Job could automate this, but not worth complexity for one-time setup.
 
-### Gotcha 3: Hardlinks Don't Work with Cloud Storage
+### Gotcha 4: Hardlinks Don't Work with Cloud Storage
 
 **Problem**: 
 - Sonarr defaults to "Use Hardlinks" for copy-on-import
@@ -1461,7 +1559,7 @@ kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
 - Trade-off: Copy mode uses 2x storage temporarily but is reliable
 - Remember: NFS from Unraid might also not support hardlinks (verify with `df -T`)
 
-### Gotcha 4: ClusterPlex LoadBalancer IP Unknown at Deploy Time
+### Gotcha 5: ClusterPlex LoadBalancer IP Unknown at Deploy Time
 
 **Problem**: 
 - Workers need `ORCHESTRATOR_URL=http://<IP>:3500`
@@ -1483,7 +1581,37 @@ kubectl get svc clusterplex-orchestrator -n media -o jsonpath='{.status.loadBala
 # Then deploy or update workers
 ```
 
-### Gotcha 5: GPU Passthrough Requires Privileged LXC
+### Gotcha 6: LXC Nodes Cannot Mount Longhorn Block Storage Directly
+
+**Problem**: 
+- w3 runs in Proxmox LXC (not VM)
+- Longhorn block storage (RWO) requires iSCSI initiator (open-iscsi daemon)
+- LXC containers cannot run iSCSI daemon due to:
+  - User namespace isolation prevents privileged operations
+  - AppArmor restrictions block kernel module loading
+  - No access to required syscalls for iSCSI operations
+
+**Why This Doesn't Break The Architecture**:
+- ✅ **Longhorn RWX volumes use share-manager pod** (runs on w1/w2 VMs)
+- ✅ **Share-manager exposes volume via NFSv4** (network protocol, no kernel modules)
+- ✅ **w3 mounts via NFS** (LXC can mount NFS without issues)
+- ✅ **Result**: ClusterPlex Worker on w3 accesses `symlink-library` PVC transparently via NFS
+
+**What Works Where**:
+| Storage Type | w1/w2 (VMs) | w3 (LXC) |
+|--------------|-------------|----------|
+| Longhorn RWO (block) | ✅ Direct iSCSI | ❌ No iSCSI support |
+| Longhorn RWX (NFSv4) | ✅ Via share-manager | ✅ Via NFS mount |
+| Unraid NFS | ✅ NFS mount | ✅ NFS mount |
+
+**Verification**:
+- w3 workers DON'T need Longhorn client or iSCSI daemon
+- Check w3 mounts: `kubectl exec deployment/clusterplex-worker -n media -- mount | grep nfs`
+- Should show NFS mounts, NOT iSCSI/Longhorn
+
+**Note**: Plex config storage MUST stay on w1/w2 (RWO requires iSCSI). ClusterPlex design already handles this correctly.
+
+### Gotcha 7: GPU Passthrough Requires Privileged LXC
 
 **Problem**: 
 - w3 runs in Proxmox LXC (not VM)
@@ -1497,7 +1625,7 @@ kubectl get svc clusterplex-orchestrator -n media -o jsonpath='{.status.loadBala
 - Verify: `kubectl describe node k3s-w3 | grep intel.com/gpu`
   - Should show resource available
 
-### Gotcha 6: SOPS Age Key Loss = Unrecoverable Secrets
+### Gotcha 8: SOPS Age Key Loss = Unrecoverable Secrets
 
 **Problem**: 
 - If age private key lost, all encrypted secrets permanently unrecoverable
@@ -1556,7 +1684,7 @@ sops -d sonarr/secrets.yaml
 - Commit `age-new.key` to 1Password, encrypted USB immediately
 ```
 
-### Gotcha 7: Prowlarr Initial Sync Takes 10-15 Minutes
+### Gotcha 9: Prowlarr Initial Sync Takes 10-15 Minutes
 
 **Problem**: 
 - After configuring Prowlarr app sync to Sonarr/Radarr
@@ -1570,7 +1698,7 @@ sops -d sonarr/secrets.yaml
   - `Sync.*completed` message indicates sync finished
 - **Verify**: Sonarr/Radarr Settings → Indexers should list Prowlarr-backed indexers
 
-### Gotcha 8: Descheduler Auto-Failback May Disrupt During Maintenance
+### Gotcha 10: Descheduler Auto-Failback May Disrupt During Maintenance
 
 **Problem**: 
 - When w1 recovers from maintenance, descheduler automatically evicts pods from w2
@@ -1586,7 +1714,7 @@ sops -d sonarr/secrets.yaml
   5. Restore descheduler: `kubectl scale deploy descheduler -n kube-system --replicas=1`
 - Alternative: Let failback happen (pods restart, resume downloads fresh)
 
-### Gotcha 9: NFS Timeout During Failover
+### Gotcha 11: NFS Timeout During Failover
 
 **Problem**: 
 - Unraid NFS is single point of failure
@@ -1601,7 +1729,7 @@ sops -d sonarr/secrets.yaml
 - If NFS fails: Pods remain runnable but can't import
   - Acceptable for homelab (Unraid SPOF is acceptable per your design)
 
-### Gotcha 10: Profilarr Manual Sync Means Settings Drift
+### Gotcha 12: Profilarr Manual Sync Means Settings Drift
 
 **Problem**: 
 - Profilarr doesn't auto-sync like Recyclarr would
