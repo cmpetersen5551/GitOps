@@ -202,10 +202,11 @@ parameters:
 - ✅ **Creates symlinks in shared Longhorn PVC** = Plex reads streaming content without duplicating storage
 - ✅ Independent restart/lifecycle management
 
-**Pod Affinity Group**: All four (Decypharr, Sonarr, Radarr, Plex) must run on **same node** to:
-1. Share FUSE mount (DFS)
-2. Share Longhorn PVC (symlink library)
-3. Failover together (w1 → w2)
+**Standardized Mount Path Strategy**: All pods mount the DFS cache at the **same path `/mnt/dfs`**:
+- Decypharr: Direct FUSE mount at `/mnt/dfs`
+- Sonarr/Radarr/Plex/Workers: NFS mount (via rclone-nfs-server sidecar) at `/mnt/dfs`
+
+This unified path means symlinks work identically across all pods, regardless of mount type. Co-location is now **optional** (simplicity/performance preference rather than requirement).
 
 **StatefulSet Configuration**:
 ```yaml
@@ -680,19 +681,26 @@ kubectl debug node/k3s-w3 -it --image=ubuntu:latest
 # Inside node debug pod: ls -la /dev/dri
 ```
 
-#### 14. Plex Media Server (*co-located with Decypharr/Sonarr/Radarr for streaming workflow*)
+#### 14. Plex Media Server (*co-located on storage nodes w1/w2*)
 
-**CRITICAL**: Plex must run on **same node** as Decypharr/Sonarr/Radarr to access both:
-1. `/mnt/dfs` (DFS mount from Decypharr) → resolves symlinks
-2. `/mnt/streaming-media` (Longhorn PVC) → streaming library
-3. `/mnt/media` (NFS) → permanent imported content
-4. `/mnt/transcode` (NFS) → ClusterPlex transcode cache
+**Architecture**: Plex runs on **same node as Decypharr/Sonarr/Radarr** (w1 primary, failover to w2) for consistency and HA symmetry:
+- Prefers w1 (via node affinity) for primary streaming stack co-location
+- Fails over to w2 with other storage apps
+- All mounts are NFS-based, so node movement works transparently
+
+**Mounts**:
+- `/mnt/dfs` → NFS mount to `decypharr-nfs.media.svc:` (read-only, RealDebrid cache)
+- `/mnt/streaming-media` → Longhorn RWX mount (symlink library)
+- `/mnt/media` → Unraid NFS mount (permanent library)
+- `/mnt/transcode` → Unraid NFS mount (transcode cache for ClusterPlex)
+
+All mount paths are standardized, so node movement and failover work seamlessly via NFS backend.
 
 **Workflow**:
 1. Decypharr creates symlinks in `/mnt/streaming-media` (e.g., `/mnt/streaming-media/TV Shows/Breaking Bad/S01E01.mkv` → `/mnt/dfs/breaking-bad-s01e01.mkv`)
 2. Sonarr/Radarr organize/rename those symlinks into proper folder structure
-3. Plex adds `/mnt/streaming-media` as library root → serves streaming content without duplication
-4. Plex also adds `/mnt/media` as library root → serves permanent content
+3. Plex reads from ONE library with multiple roots (/mnt/streaming-media + /mnt/media) via NFS → all symbolic links resolve correctly
+4. Plex serves streaming content (via symlink chain) and permanent content side-by-side
 
 **StatefulSet Configuration**:
 ```yaml
@@ -1179,27 +1187,29 @@ Then encrypt: `sops --encrypt --in-place pulsarr/secrets.yaml`
 │ │ │  │ (Longhorn) │  │ (Longhorn) │  │ (Longhorn +   │    │ ││
 │ │ │  │            │  │            │  │  hostPath FUSE│    │ ││
 │ │ │  └────────────┘  └────────────┘  │ + rclone-nfs) │    │ ││
-│ │ │  Pod affinity: co-located + │    └───────────────┘    │ ││
-│ │ │   init container ordering    │    ↓ NFS export (2049) │ ││
-│ │ │                              │    Service: decypharr-nfs││
-│ │ │  ┌────────────┐  ┌─────────────┐ ┌──────────────┐    │ ││
-│ │ │  │ Prowlarr * │  │ Profilarr * │ │ Plex *       │    │ ││
-│ │ │  │ (Longhorn) │  │ (Longhorn)  │ │ (Longhorn +  │    │ ││
-│ │ │  │            │  │             │ │  NFS media)  │    │ ││
-│ │ │  └────────────┘  └─────────────┘ └──────────────┘    │ ││
+│ │ │  Pod affinity: co-located +      └───────────────┘    │ ││
+│ │ │   node affinity to w1 (primary)   ↓ NFS export        │ ││
+│ │ │                                    Service: decypharr  │ ││
+│ │ │  ┌────────────┐  ┌─────────────┐ -nfs (port 2049)    │ ││
+│ │ │  │ Prowlarr * │  │ Profilarr * │  ┌──────────────┐   │ ││
+│ │ │  │ (Longhorn) │  │ (Longhorn)  │  │ Plex *       │   │ ││
+│ │ │  │            │  │             │  │ (Longhorn +  │   │ ││
+│ │ │  └────────────┘  └─────────────┘  │  NFS media)  │   │ ││
 │ │ │  * = StatefulSet (HA via descheduler failback)        │ ││
+│ │ │  Plex: Co-located w/ storage stack (w1 primary, w2 failover)││
 │ │ └─────────────────────────────────────────────────────────┘ ││
-│ │                                     ↓ NFS mount           ││
+│ │                                                              ││
 │ │ ┌─────────────────────────────────────────────────────────┐ ││
-│ │ │ GPU Node (w3) - Isolated                               │ ││
+│ │ │ GPU Node (w3) - Transcoding Only                        │ ││
 │ │ │  ┌──────────────────────────────────────────────────┐  │ ││
-│ │ │  │ ClusterPlex Worker                              │  │ ││
-│ │ │  │ - intel.com/gpu: 1                              │  │ ││
-│ │ │  │ - Mount: /mnt/dfs (decypharr-nfs, RO)           │  │ ││
-│ │ │  │ - Mount: /mnt/streaming-media (Longhorn, RO)    │  │ ││
-│ │ │  │ - Mount: /mnt/media (Unraid NFS, RO)            │  │ ││
-│ │ │  │ - Mount: /mnt/transcode (Unraid NFS, RW)        │  │ ││
-│ │ │  │ ✅ Can transcode both streaming + permanent     │  │ ││
+│ │ │  │ ClusterPlex Worker (w3 GPU)                     │  │ ││
+│ │ │  │ - intel.com/gpu: 1                             │  │ ││
+│ │ │  │ - Mounts:                                      │  │ ││
+│ │ │  │   • /mnt/dfs (NFS) → decypharr-nfs (RO)       │  │ ││
+│ │ │  │   • /mnt/streaming-media (Longhorn RWX, RO)   │  │ ││
+│ │ │  │   • /mnt/media (Unraid NFS, RO)               │  │ ││
+│ │ │  │   • /mnt/transcode (Unraid NFS, RW)           │  │ ││
+│ │ │  │ ✅ Can transcode streaming + permanent        │  │ ││
 │ │ │  └──────────────────────────────────────────────────┘  │ ││
 │ │ └─────────────────────────────────────────────────────────┘ ││
 │ │                                                              ││
@@ -1226,7 +1236,23 @@ Then encrypt: `sops --encrypt --in-place pulsarr/secrets.yaml`
 │ └──────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 
-Data Flow (Streaming Workflow):
+## Mount Path Strategy (Key to Flexibility)
+
+All pods standardize on `/mnt/dfs` mount point:
+- **Decypharr**: Direct FUSE mount at `/mnt/dfs` (pod creates symlinks here)
+- **Sonarr/Radarr**: NFS mount to `decypharr-nfs.media.svc:` at `/mnt/dfs` 
+- **Plex**: NFS mount to `decypharr-nfs.media.svc:` at `/mnt/dfs`
+- **ClusterPlex Worker**: NFS mount to `decypharr-nfs.media.svc:` at `/mnt/dfs`
+
+**Result**: Symlinks created by Decypharr resolve identically across all nodes:
+```
+Symlink: /mnt/streaming-media/TV/Show/S01E01.mkv → /mnt/dfs/file.mkv
+         ↓ works from w1 (FUSE), w2 (NFS), w3 (NFS)
+```
+
+This unified approach eliminates the need for strict pod co-location while maintaining HA failover capability.
+
+## Data Flows
 1. User adds show to Plex watchlist → Pulsarr detects → requests in Sonarr (tagged "streaming")
 2. Sonarr searches Prowlarr → finds torrent → sends to Decypharr
 3. Decypharr downloads from RealDebrid → stores in /mnt/dfs (FUSE mount)
@@ -1256,42 +1282,61 @@ Data Flow (Cache Expiration without Upgrade):
 
 ## Critical Gotchas & Mitigations
 
-### Gotcha 0: Symlink Library Must Be Co-Located with Decypharr/Sonarr/Radarr
+### Gotcha 0: Standardized Mount Path Strategy Solves Symlink Resolution Across Nodes
 
-**Problem**: 
-- Plex reads symlinks in `/mnt/streaming-media` (Longhorn PVC)
-- Those symlinks point to `/mnt/dfs` (FUSE mount from Decypharr)
-- FUSE mounts are node-specific (can't be accessed from different nodes)
-- If Plex runs on different node than Decypharr, symlinks break (targets unreachable)
+**Key Insight**: 
+By mounting the DFS cache at the **same path `/mnt/dfs`** across all pods (whether direct FUSE or NFS), symlinks resolve identically regardless of node placement:
 
-**Solution**:
-- All four apps (Decypharr, Sonarr, Radarr, Plex) use **streaming-stack affinity group**
-- Pod affinity ensures they co-locate on same node (preferably w1, failover together to w2)
-- On failover: All move to w2 → FUSE mount re-established → symlinks resolve again
-- On failback: Descheduler migrates all back to w1 together
+```
+Decypharr (pod on w1):              Plex (pod on w3):              Sonarr (pod on w1):
+/mnt/dfs/file.mkv                   /mnt/dfs/file.mkv             /mnt/dfs/file.mkv
+  ↓ FUSE mount                        ↓ NFS mount                   ↓ FUSE mount
+  Direct access                      Via rclone-nfs-server        Direct access
+  Same symlink target: /mnt/dfs/file.mkv ✅ Works!
+```
+
+**Why This Works**:
+- Decypharr: Creates symlinks pointing to `/mnt/dfs/file.mkv`
+- All other pods: Mount NFS service at same path `/mnt/dfs` → symlink targets resolve
+- Mount backend (FUSE vs NFS) is transparent to applications
+
+**Implication for Deployment Architecture**:
+- ✅ **Plex runs on w1/w2 storage nodes**: Co-located with Decypharr/Sonarr/Radarr for HA symmetry
+- ✅ **All mounts via NFS**: Even though Plex is co-located, all mounts are NFS-based (not FUSE)
+- ✅ **w3 reserved for GPU**: ClusterPlex Worker on w3 handles all GPU transcoding requests
+- ✅ **Flexibility at architecture level**: Mount standardization allows easy redesign if needed (e.g., co-location is optional, not required)
 
 **Verification**:
-- All four pods on same node: `kubectl get pods -n media -o wide | grep -E "sonarr|radarr|decypharr|plex"` (check NODE column—all should match)
-- Symlinks readable from Plex: `kubectl exec plex-0 -n media -- ls -la /mnt/streaming-media/ 2>/dev/null && echo "OK"`
-- Test symlink resolution: `kubectl exec plex-0 -n media -- readlink /mnt/streaming-media/ | head -1`
+- Test symlink resolution from different nodes:
+  ```bash
+  # From Plex pod (any node)
+  kubectl exec plex-0 -n media -- readlink -f /mnt/streaming-media/TV/Show/S01E01.mkv
+  # Should show: /mnt/dfs/file.mkv ✅
+  
+  # From Sonarr pod (any node)
+  kubectl exec sonarr-0 -n media -- readlink -f /mnt/streaming-media/TV/Show/S01E01.mkv
+  # Should show: /mnt/dfs/file.mkv ✅
+  ```
 
-**HA Testing**:
+**HA Failover Testing**:
 ```bash
-# Drain w1 → pods move to w2
+# Drain w1 → pods on w1 move to w2
 kubectl drain k3s-w1 --ignore-daemonsets --delete-emptydir-data
 
-# Verify all four pods on w2
-kubectl get pods -n media -o wide | grep -E "sonarr|radarr|decypharr|plex"
-# All should show "k3s-w2"
+# Verify Decypharr moved to w2
+kubectl get pods -n media decypharr-0 -o wide
+# Should show NODE: k3s-w2
 
-# Verify symlinks still resolve
-kubectl exec plex-0 -n media -- test -r /mnt/streaming-media && echo "symlinks OK"
+# Verify NFS service still reachable from any pod
+kubectl exec plex-0 -n media -- ls -la /mnt/dfs | head
+# Should show DFS files (NFS service IP updated automatically) ✅
 
 # Restore w1
 kubectl uncordon k3s-w1
 
-# Wait 5min for descheduler, verify all migrate back to w1
-kubectl get pods -n media -o wide -w
+# Pods can migrate back (descheduler) but NOT required for functionality
+kubectl get pods -n media -o wide
+# Plex remains on w2 or wherever it is—symlinks still resolve via NFS ✅
 ```
 
 ### Gotcha 1: Sonarr/Radarr Do NOT Support Root Folder → Download Client Binding
@@ -1330,53 +1375,56 @@ Sonarr Shows:
 
 ---
 
-### Gotcha 1: Decypharr DFS FUSE Mount Sharing with HA Failover + Remote Transcoding
+### Gotcha 1: rclone NFS Sidecar is the Primary Mitigation for Cross-Node Access
 
-**Problem**: 
-- FUSE mounts are process-specific and per-node
-- Can't be shared across pods on different nodes
-- During w1→w2 failover, FUSE mount lost → Sonarr/Radarr can't import
-- ClusterPlex workers on w3 (GPU node) can't access FUSE mount for transcoding streaming content
+**Problem Solved**: 
+- FUSE mounts are process-specific and per-node (can't cross nodes)
+- Direct FUSE access to Decypharr DFS from remote pods fails
+- ClusterPlex workers on w3 (GPU node) need DFS access for streaming transcodes
+- Sonarr/Radarr/Plex need consistent `/mnt/dfs` mount path across nodes
 
-**Mitigation**:
-1. **Pod Affinity**: All four (Decypharr, Sonarr, Radarr, Plex) prefer same node
-   - Effect: On failover, all four move together to w2
-   - Benefit: FUSE mount moves with consumers
-2. **Init Container Ordering**: Sonarr/Radarr wait for Decypharr to mount
-   - Effect: Guarantees correct startup sequence
-   - Prevents import-path-not-found errors
-3. **Descheduler Failback**: When w1 recovers, pods return to w1 (all together)
-   - Effect: Eventually return to primary node
-4. **rclone NFS Server Sidecar**: Exposes DFS cache as NFS for remote workers
-   - Effect: ClusterPlex workers on w3 can mount `decypharr-nfs:/` and read DFS files
-   - Benefit: Remote GPU transcoding works for streaming content
-   - Read-only mount prevents accidental writes from workers
+**Mitigation: rclone NFS Server Sidecar**:
+- **Decypharr StatefulSet includes `rclone-nfs-server` sidecar** (port 2049)
+- Sidecar exposes Decypharr's FUSE mount as read-only NFS share
+- All pods mount `decypharr-nfs.media.svc.cluster.local:/` at `/mnt/dfs` (Kubernetes Service DNS automatically routes to current Decypharr pod)
+- Effect: **All pods see identical `/mnt/dfs` path** regardless of node or mount backend
+- Benefit: Symlinks work identically across w1, w2, w3 (NFS mount vs direct FUSE is transparent)
 
-**Test failover**:
+**Optional Optimizations** (not required for correctness):
+1. **Pod Affinity** (Decypharr/Sonarr/Radarr only): Co-locate on w1 for direct FUSE access
+   - Effect: Frequent file operations avoid NFS overhead during imports
+   - Performance benefit only, not correctness requirement
+2. **Init Container Ordering** (Sonarr/Radarr): Wait for Decypharr readiness probe
+   - Effect: Guarantees rclone-nfs-server is serving before other pods mount
+   - Best practice for startup reliability
+
+**Test failover** (Storage stack failover with HA symmetry):
 ```bash
-# Simulate w1 failure
+# Simulate w1 failure → all storage pods move together to w2
 kubectl drain k3s-w1 --ignore-daemonsets --delete-emptydir-data
 
-# Verify all four pods moved to w2
+# Verify all storage apps migrated to w2
 kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
-# All should show "k3s-w2"
+# All should show NODE: k3s-w2
 
-# Verify NFS service still reachable
-kubectl exec deployment/clusterplex-worker -n media -- ls /mnt/dfs | head
-# Should show DFS files (NFS automatically redirects to new pod IP)
+# Verify NFS service reachable (auto-redirected to w2 Decypharr pod)
+kubectl exec plex-0 -n media -- ls /mnt/dfs | head
+# Should show DFS files (Service DNS updated) ✅
 
-# Trigger import test (should work on w2)
+# Verify imports still work from w2
+kubectl exec sonarr-0 -n media -- ls /mnt/streaming-media | head
+# Should show streaming library (all mounts work on w2) ✅
 
 # Restore w1
 kubectl uncordon k3s-w1
 
-# Wait 5min for descheduler
-kubectl get pods -n media -o wide | watch
-# Pods should migrate back to w1
+# Wait 5min for descheduler to migrate pods back to w1 (preferred node)
+kubectl get pods -n media -o wide -w
 
-# Re-verify NFS mount on worker
-kubectl exec deployment/clusterplex-worker -n media -- ls /mnt/dfs | head
-# Should still work (NFS follows service to w1)
+# Verify all storage apps back on w1
+kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
+# All should show NODE: k3s-w1 ✅
+# Symlinks continue working throughout migration (NFS transparent) ✅
 ```
 
 ### Gotcha 2: Prowlarr API Chicken-Egg Problem
