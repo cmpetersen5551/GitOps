@@ -1,6 +1,6 @@
 # Media Automation Stack Implementation Plan
 
-**TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr DFS for streamed downloads via RealDebrid/UsenetExpress, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. Implement SOPS with age for GitOps secrets management.
+**TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr DFS for streamed downloads via RealDebrid/UsenetExpress, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. All credentials are configured via application UIs.
 
 **Estimated Total Time**: 12-16 hours over multiple days
 
@@ -8,25 +8,10 @@
 
 ## Deployment Order & Phases
 
-### Phase 1: Foundation (Secrets & Infrastructure)
-**Estimated Time**: 2-3 hours
+### Phase 1: Foundation (Storage Infrastructure)
+**Estimated Time**: 30-45 minutes
 
-#### 1. SOPS Setup (*must be first*)
-- Generate age keypair: `age-keygen -o age.key`
-- Backup in 3 locations: 1Password (Secure Note), encrypted USB drive, printed QR code
-- Create `.sops.yaml` in repo root with public key
-- Create Kubernetes Secret: `kubectl create secret generic sops-age --namespace=flux-system --from-file=age.agekey=./age.key`
-- Update all Flux Kustomizations with decryption config:
-  ```yaml
-  spec:
-    decryption:
-      provider: sops
-      secretRef:
-        name: sops-age
-  ```
-- Test with dummy secret: `kubectl create secret generic test-secret --from-literal=key=value --dry-run=client -o yaml | sops --encrypt /dev/stdin` → verify it encrypts
-
-#### 2. Base Media Namespace & Storage PVCs (*parallel with step 1*)
+#### 1. Base Media Namespace & Storage PVCs
 - Namespace `media` already exists, verify: `kubectl get namespace media`
 - Add NFS PVC for Unraid media library (read-only for permanent imports):
   ```yaml
@@ -176,7 +161,6 @@ parameters:
 ```
 
 **Verification**: 
-- `sops -d test-secret.yaml` works (outputs plaintext)
 - `kubectl get pvc -n media` shows all PVCs bound (media-library, transcode-cache, streaming-media, config-* PVCs)
 - `kubectl get storageclass longhorn-rwx longhorn-simple` shows both StorageClasses ready
 
@@ -201,15 +185,13 @@ parameters:
 - Ingress: `sonarr.homelab` (via Traefik)
 - **Manual post-deploy**:
   1. Access via ingress, wait 2-3 min for DB initialization
-  2. Settings → General → Security → Copy API Key
-  3. Save in 1Password: `Sonarr API Key`
-  4. Encrypt and commit to repo: `clusters/homelab/apps/media/sonarr/secrets.yaml`
+  2. Settings → General → Security → Note API Key (for Prowlarr configuration)
 
 #### 4. Radarr (*parallel with Sonarr*)
 - Same architecture as Sonarr, but:
   - Longhorn PVC: `config-radarr` (10Gi, can be larger if many movies)
   - Ingress: `radarr.homelab`
-  - **Manual post-deploy**: Extract API key, save to 1Password
+  - **Manual post-deploy**: Note API key from Settings → General → Security (for Prowlarr configuration)
 
 **Verification**: 
 - Both pods running on w1: `kubectl get pods -n media -o wide | grep -E "sonarr|radarr"`
@@ -236,7 +218,7 @@ parameters:
   2. Settings → Apps → Add Applications:
      - Application: Sonarr
      - Sync URL: `http://sonarr:8989` (Kubernetes service DNS)
-     - API Key: paste from 1Password
+     - API Key: paste from Sonarr (Settings → General → Security)
      - Sync profiles/categories
      - Test & Save
      - Repeat for Radarr with `http://radarr:8989`
@@ -244,8 +226,6 @@ parameters:
   4. **CRITICAL**: Wait 10-15 minutes for initial sync
   5. Verify indexers appear in Sonarr/Radarr Settings → Indexers
   6. In Sonarr/Radarr, manually disable any non-Prowlarr versions of existing indexers
-  7. Extract Prowlarr API Key, save to 1Password
-  8. Encrypt and commit: `clusters/homelab/apps/media/prowlarr/secrets.yaml`
 
 **Why manual indexer setup?**
 - No standard format for bulk indexer import (vary by source/format)
@@ -258,16 +238,11 @@ parameters:
   - Longhorn PVC: `config-profilarr` (2Gi)
   - Port: 6868
   - Resource requests: 50m CPU, 256Mi RAM
-  - Environment (via encrypted secrets):
-    - `SONARR_URL=http://sonarr:8989`
-    - `SONARR_API_KEY=<encrypted>`
-    - `RADARR_URL=http://radarr:8989`
-    - `RADARR_API_KEY=<encrypted>`
 - ClusterIP Service port 6868
 - Ingress: `profilarr.homelab`
 - **Manual post-deploy**:
   1. Access Profilarr UI
-  2. Verify API connections to Sonarr/Radarr
+  2. Configure connections to Sonarr/Radarr (URLs and API keys entered in UI)
   3. Import TRaSH Guides quality profiles (manual process via Profilarr UI)
   4. Click "Sync" to push profiles to Sonarr/Radarr
   5. Quarterly: Repeat when TRaSH Guides update
@@ -493,42 +468,22 @@ spec:
   ```
 - Ingress: `decypharr.homelab`
 
-**Secrets**:
-Create encrypted secret with Debrid/Usenet credentials:
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: decypharr-secrets
-  namespace: media
-type: Opaque
-stringData:
-  realdebrid-api-key: "YOUR_REALDEBRID_API_KEY"
-  usenet-host: "YOUR_USENET_HOST"
-  usenet-user: "YOUR_USENET_USER"
-  usenet-pass: "YOUR_USENET_PASS"
-```
-
-Then encrypt with SOPS: `sops --encrypt --in-place decypharr/secrets.yaml`
-
-**Decypharr Configuration** (Manual Setup):
-- Configure Decypharr to **create symlinks** in `/mnt/streaming-media` instead of copying files
-  - RealDebrid provider: Set import mode to "symlink" (if available) or ensure post-processing creates symlinks
-  - Usenet provider: Same symlink strategy
-- Ensure symlink folder structure matches what Sonarr/Radarr will create (e.g., `/mnt/streaming-media/TV Shows/Show Name/`)
-
 **Manual post-deploy**:
-1. Wait 10-15s for pod to start (FUSE mount init takes time)
-2. Access Decypharr UI at `decypharr.homelab`
-3. Configure RealDebrid providers (Add credentials, test)
-4. Configure Usenet provider (NNTP host, user, pass, test)
-5. Verify DFS mount: `kubectl exec decypharr-0 -n media -- ls -la /mnt/dfs`
+1. Wait 10-15s for pod to start
+2. Access Decypharr Setup Wizard at `decypharr.homelab` (first-run automatically launches wizard)
+3. Follow Setup Wizard:
+   - **Step 1**: Create admin credentials
+   - **Step 2**: Add RealDebrid provider (paste API key from RealDebrid account dashboard)
+   - **Step 3**: Add Usenet provider (NNTP host, port 563, username, password)
+   - **Step 4**: Configure mount type as DFS, mount path `/mnt/dfs`
+   - **Step 5**: Complete setup
+4. Verify DFS mount: `kubectl exec decypharr-0 -n media -- ls -la /mnt/dfs`
    - Should show `drwxr-xr-x`
    - May be empty initially (populates on demand)
-6. Verify streaming media library mount: `kubectl exec decypharr-0 -n media -- ls -la /mnt/streaming-media`
+5. Verify streaming media library mount: `kubectl exec decypharr-0 -n media -- ls -la /mnt/streaming-media`
    - Should be writable by Decypharr
-7. Check mount from Sonarr/Radarr: `kubectl exec sonarr-0 -n media -- ls -la /mnt/dfs`
-   - Must be accessible (init containers below ensure this)
+6. Check mount from Sonarr/Radarr: `kubectl exec sonarr-0 -n media -- ls -la /mnt/dfs`
+   - Must be accessible (init containers ensure this)
 
 **Verification**:
 - Decypharr pod running on w1 with 2 containers: `kubectl get pods -n media decypharr-0 -o jsonpath='{.status.containerStatuses[*].name}'` → should show "decypharr rclone-nfs-server"
@@ -925,34 +880,20 @@ spec:
 - LoadBalancer Service (via MetalLB BGP) on port 32400 for external clients
 - Ingress: `plex.homelab` (for web UI access via internal network)
 
-**Secrets**:
-Generate Plex claim token at `https://www.plex.tv/claim` (valid 4 minutes):
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: plex-secrets
-  namespace: media
-type: Opaque
-stringData:
-  plex-claim: "claim-YOUR_CLAIM_TOKEN"
-```
-
-Then encrypt: `sops --encrypt --in-place plex/secrets.yaml`
-
 **Manual post-deploy**:
 1. Wait 5-10 min for initial startup
 2. Access Plex UI via `plex.homelab:32400` or LoadBalancer IP
-3. Complete setup wizard (name server, enable remote access)
+3. Complete setup wizard:
+   - Create/sign in to Plex account
+   - Claim server with your account
+   - Name server, enable remote access
 4. Add media library with THREE root folders (unified view):
    - Library Name: "TV Shows" (or "Movies")
    - **Root Folder 1**: `/mnt/streaming-media` (streaming content, symlinks to DFS)
    - **Root Folder 2**: `/mnt/media` (permanent content, NFS from Unraid)
    - Plex will treat all as one library, showing all content together
 5. Refresh library
-6. Generate Plex token for other apps:
-   - Settings → Account → Look for "X-Plex-Token" in auth cookie or API
-   - Save to 1Password as `Plex Auth Token`
+6. (Optional) If using Pulsarr: Extract Plex auth token from Settings → Account for Pulsarr configuration
 7. Verify symlink resolution:
    - Play a streamed show (from `/mnt/streaming-media`)
    - Should resolve through symlink to DFS cache
@@ -1210,27 +1151,12 @@ spec:
             - containerPort: 3000
               name: web
           env:
-            - name: PLEX_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: plex-secrets
-                  key: plex-auth-token
             - name: PLEX_URL
               value: "http://plex:32400"
             - name: SONARR_URL
               value: "http://sonarr:8989"
-            - name: SONARR_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: arr-api-keys
-                  key: sonarr-api-key
             - name: RADARR_URL
               value: "http://radarr:8989"
-            - name: RADARR_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: arr-api-keys
-                  key: radarr-api-key
             - name: POLL_INTERVAL
               value: "900"  # 15 minutes in seconds
           resources:
@@ -1246,27 +1172,12 @@ spec:
 - ClusterIP Service (optional, mainly for logging/monitoring)
 - Ingress: `pulsarr.homelab`
 
-**Secrets**:
-Create encrypted secret with API keys:
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: arr-api-keys
-  namespace: media
-type: Opaque
-stringData:
-  sonarr-api-key: "YOUR_SONARR_API_KEY"
-  radarr-api-key: "YOUR_RADARR_API_KEY"
-  plex-auth-token: "YOUR_PLEX_AUTH_TOKEN"
-```
-
-Then encrypt: `sops --encrypt --in-place pulsarr/secrets.yaml`
-
 **Manual post-deploy**:
-1. Add items to Plex watchlist
-2. Wait up to 15 minutes for Pulsarr to poll watchlist
-3. Check Sonarr/Radarr for new requests
+1. Access Pulsarr UI at `pulsarr.homelab`
+2. Configure API keys for Sonarr, Radarr, and Plex (enter in UI)
+3. Add items to Plex watchlist
+4. Wait up to 15 minutes for Pulsarr to poll watchlist
+5. Check Sonarr/Radarr for new requests
 
 **Verification**: 
 - Add TV show to Plex watchlist → appears in Sonarr within 15 min
@@ -1538,10 +1449,10 @@ kubectl get pods -n media -o wide | grep -E "decypharr|sonarr|radarr|plex"
 
 **Mitigation**:
 1. Deploy Sonarr/Radarr FIRST (Phase 2)
-2. Extract API keys manually (Settings UI or Kubernetes secret)
-3. Store in 1Password + encrypted secret in Git
-4. Deploy Prowlarr SECOND (Phase 3) with keys in environment
-5. Configure app sync via Prowlarr UI or init Job
+2. Extract API keys manually from Settings UI
+3. Provide API keys to Prowlarr during configuration (via Prowlarr UI)
+4. Deploy Prowlarr SECOND (Phase 3) with keys entered manually
+5. Configure app sync via Prowlarr UI
 
 **Automation Option (Future)**: Two-phase init Job could automate this, but not worth complexity for one-time setup.
 
@@ -1625,66 +1536,7 @@ kubectl get svc clusterplex-orchestrator -n media -o jsonpath='{.status.loadBala
 - Verify: `kubectl describe node k3s-w3 | grep intel.com/gpu`
   - Should show resource available
 
-### Gotcha 8: SOPS Age Key Loss = Unrecoverable Secrets
-
-**Problem**: 
-- If age private key lost, all encrypted secrets permanently unrecoverable
-- No way to decrypt without key
-- Must regenerate ALL API keys, credentials
-
-**Mitigation - Backup Strategy**:
-1. **Auto-backup to 1Password** (encrypted, cloud-synced):
-   - Copy `age.key` content
-   - Create 1Password Secure Note: "Age Encryption Key Backup"
-   - Add to both personal vault + team vault if shared
-
-2. **Offline backup to encrypted USB**:
-   - Store encrypted USB in physical location
-   - Verify annually
-
-3. **Printed QR code in safe** (extreme, but useful):
-   - QR encodes `age.key` text
-   - Survives all-digital failures
-
-4. **Plaintext fallback** (separate from age key):
-   - Store plaintext copy of critical secrets in 1Password
-   - Different vault/note from age key
-   - If key lost, can manually recreate without re-authenticating everywhere
-
-**Test recovery quarterly**:
-```bash
-# Simulate key loss
-rm age.key
-
-# Try to decrypt → should fail
-sops -d sonarr/secrets.yaml
-# Error: can't find key
-
-# Restore from 1Password backup
-# Retry decrypt → should succeed
-```
-
-**Recovery document** (`docs/SECRETS_RECOVERY.md`):
-```markdown
-## Age Key Loss Recovery
-
-### If age.key lost:
-1. Retrieve from 1Password Secure Note "Age Encryption Key Backup"
-2. Save locally: `cp age-backup.txt age.key`
-3. Verify: `sops -d clusters/homelab/apps/media/sonarr/secrets.yaml`
-
-### If all backups lost:
-1. Regenerate all API keys (Sonarr, Radarr, Prowlarr, Plex, Debrid, Usenet)
-2. Generate new age key: `age-keygen -o age-new.key`
-3. Update `.sops.yaml` with new public key
-4. Re-encrypt all secrets: `find . -name '*secrets.yaml' -exec sops updatekeys {} \;`
-5. Commit and push to Git
-
-### Prevents future loss:
-- Commit `age-new.key` to 1Password, encrypted USB immediately
-```
-
-### Gotcha 9: Prowlarr Initial Sync Takes 10-15 Minutes
+### Gotcha 8: Prowlarr Initial Sync Takes 10-15 Minutes
 
 **Problem**: 
 - After configuring Prowlarr app sync to Sonarr/Radarr
@@ -1698,7 +1550,7 @@ sops -d sonarr/secrets.yaml
   - `Sync.*completed` message indicates sync finished
 - **Verify**: Sonarr/Radarr Settings → Indexers should list Prowlarr-backed indexers
 
-### Gotcha 10: Descheduler Auto-Failback May Disrupt During Maintenance
+### Gotcha 9: Descheduler Auto-Failback May Disrupt During Maintenance
 
 **Problem**: 
 - When w1 recovers from maintenance, descheduler automatically evicts pods from w2
@@ -1714,7 +1566,7 @@ sops -d sonarr/secrets.yaml
   5. Restore descheduler: `kubectl scale deploy descheduler -n kube-system --replicas=1`
 - Alternative: Let failback happen (pods restart, resume downloads fresh)
 
-### Gotcha 11: NFS Timeout During Failover
+### Gotcha 10: NFS Timeout During Failover
 
 **Problem**: 
 - Unraid NFS is single point of failure
@@ -1729,7 +1581,7 @@ sops -d sonarr/secrets.yaml
 - If NFS fails: Pods remain runnable but can't import
   - Acceptable for homelab (Unraid SPOF is acceptable per your design)
 
-### Gotcha 12: Profilarr Manual Sync Means Settings Drift
+### Gotcha 11: Profilarr Manual Sync Means Settings Drift
 
 **Problem**: 
 - Profilarr doesn't auto-sync like Recyclarr would
@@ -1749,9 +1601,6 @@ sops -d sonarr/secrets.yaml
 ### Per-Tier Validation
 
 **Tier 1: Foundation**
-- [ ] SOPS age key backed up in 3 locations (1Password, USB, printed QR)
-- [ ] `.sops.yaml` in repo root with public key
-- [ ] Flux kustomizations configured for SOPS decryption
 - [ ] NFS PVCs bound: `kubectl get pvc -n media | grep nfs`
 - [ ] Streaming media PVC bound: `kubectl get pvc -n media streaming-media`
 
@@ -1759,13 +1608,13 @@ sops -d sonarr/secrets.yaml
 - [ ] Sonarr pod running on w1: `kubectl get pod sonarr-0 -n media -o wide`
 - [ ] Sonarr PVC bound: `kubectl get pvc config-sonarr -n media`
 - [ ] Sonarr ingress working: `curl http://sonarr.homelab/health` → 200
-- [ ] Sonarr API key extracted and encrypted in Secret
-- [ ] Radarr pod running, API key extracted (repeat verification)
+- [ ] Sonarr API key noted from Settings UI (for Prowlarr configuration)
+- [ ] Radarr pod running, API key noted from Settings UI (repeat verification)
 - [ ] Prowlarr pod running, indexers synced to Sonarr/Radarr:
   - [ ] `kubectl logs prowlarr-0 -n media | grep "Sync.*completed"`
   - [ ] Sonarr: Settings → Indexers shows "Prowlarr" indexers
   - [ ] Radarr: Settings → Indexers shows "Prowlarr" indexers
-- [ ] Profilarr pod running, connected to Sonarr/Radarr APIs
+- [ ] Profilarr pod running, connected to Sonarr/Radarr APIs (via UI configuration)
 
 **Tier 3: Decypharr & Symlink Library**
 - [ ] Decypharr pod running on w1 with 2 containers: `kubectl get pod decypharr-0 -n media -o jsonpath='{.status.containerStatuses[*].name}'` → should show "decypharr rclone-nfs-server"
@@ -1853,44 +1702,39 @@ clusters/homelab/apps/media/
 │   ├── ingress.yaml                      (✅ exists)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 10Gi)
 │   ├── kustomization.yaml                (UPDATE)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted API key)
+│   └── ingress.yaml                      (NEW)
 ├── radarr/
 │   ├── statefulset.yaml                  (NEW - same as sonarr with Decypharr init)
 │   ├── service.yaml                      (NEW)
 │   ├── service-headless.yaml             (NEW)
 │   ├── ingress.yaml                      (NEW)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 10Gi)
-│   ├── kustomization.yaml                (NEW)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted API key)
+│   └── kustomization.yaml                (NEW)
 ├── prowlarr/
 │   ├── statefulset.yaml                  (✅ exists, UPDATE - add pod affinity/init for ordering)
 │   ├── service.yaml                      (✅ exists)
 │   ├── service-headless.yaml             (✅ exists)
 │   ├── ingress.yaml                      (✅ exists)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 5Gi)
-│   ├── kustomization.yaml                (UPDATE)
-│   └── secrets.yaml                      (NEW - if using API automation)
+│   └── kustomization.yaml                (UPDATE)
 ├── profilarr/
 │   ├── statefulset.yaml                  (NEW)
 │   ├── service.yaml                      (NEW)
 │   ├── ingress.yaml                      (NEW)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 2Gi)
-│   ├── kustomization.yaml                (NEW)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted Sonarr/Radarr API keys)
+│   └── kustomization.yaml                (NEW)
 ├── decypharr/
 │   ├── statefulset.yaml                  (NEW - with FUSE/hostPath, pod affinity, init container signals)
 │   ├── service.yaml                      (NEW - ClusterIP port 8080)
 │   ├── ingress.yaml                      (NEW)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 5Gi)
-│   ├── kustomization.yaml                (NEW)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted RealDebrid + Usenet creds)
+│   └── kustomization.yaml                (NEW)
 ├── plex/
 │   ├── statefulset.yaml                  (NEW - with ClusterPlex dockermod)
 │   ├── service.yaml                      (NEW - LoadBalancer via MetalLB)
 │   ├── ingress.yaml                      (NEW)
 │   ├── pvc-config.yaml                   (NEW - Longhorn 50Gi)
-│   ├── kustomization.yaml                (NEW)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted Plex claim token)
+│   └── kustomization.yaml                (NEW)
 ├── clusterplex/
 │   ├── orchestrator-deployment.yaml      (NEW)
 │   ├── orchestrator-service.yaml         (NEW - LoadBalancer port 3500)
@@ -1901,8 +1745,7 @@ clusters/homelab/apps/media/
 │   ├── deployment.yaml                   (NEW - stateless)
 │   ├── service.yaml                      (NEW - ClusterIP optional)
 │   ├── ingress.yaml                      (NEW - optional, mainly for health monitoring)
-│   ├── kustomization.yaml                (NEW)
-│   └── secrets.yaml                      (NEW - SOPS-encrypted API keys)
+│   └── kustomization.yaml                (NEW)
 ├── nfs/
 │   ├── pvc-media.yaml                    (✅ exists, verify RO setup)
 │   ├── pvc-transcode.yaml                (NEW - RW transcode cache for ClusterPlex)
@@ -1921,25 +1764,21 @@ clusters/homelab/infrastructure/
 
 docs/
 ├── MEDIA_STACK_IMPLEMENTATION_PLAN.md    (THIS FILE - saved as reference)
-├── SECRETS_MANAGEMENT.md                 (NEW - SOPS setup + recovery procedure)
 ├── DECYPHARR_DFS_SETUP.md               (NEW - FUSE mount troubleshooting guide)
 ├── CLUSTERPLEX_ARCHITECTURE.md          (NEW - GPU transcoding reference)
-├── SECRETS_RECOVERY.md                   (NEW - age key loss recovery playbook)
 └── PROFILARR_QUALITY_PROFILES.md        (NEW - TRaSH Guides integration reference)
-
-.sops.yaml                                (NEW - repo root SOPS configuration)
 ```
 
 ---
 
 ## Implementation Order (Recommended)
 
-1. **Before any pods**: SOPS setup (Phase 1), test with dummy secret
+1. **Before any pods**: Create storage PVCs (Phase 1)
 2. **Parallel streams**:
    - Sonarr/Radarr StatefulSets + PVCs (Phase 2)
    - Prowlarr StatefulSet + PVCs (Phase 3)
-3. **After *arr apps running**: Extract API keys, configure Prowlarr sync
-4. **Then**: Decypharr StatefulSet (Phase 4)
+3. **After *arr apps running**: Extract API keys from UI, configure Prowlarr manually
+4. **Then**: Decypharr StatefulSet (Phase 4) - configure via Setup Wizard
 5. **After Decypharr mounts**: Update Sonarr/Radarr init containers, configure download clients
 6. **Once downloads working**: Deploy Plex + ClusterPlex (Phase 7)
 7. **Finally**: Profilarr setup (manual process) + Pulsarr deployment (Phase 6 & 8)
@@ -1953,7 +1792,7 @@ docs/
 | **Decypharr as separate pod** (not sidecar) | Single DFS mount shared by Sonarr/Radarr; efficient; can restart independently | More complex pod affinity & init container logic |
 | **Pod affinity for co-location** | Ensures all three move together on failover → DFS mount doesn't get stuck on wrong node | Reduced flexibility; pods restricted to same node |
 | **Init container ordering** | Guarantees Decypharr mounts before Sonarr/Radarr start → avoids import-path-not-found errors | Added pod startup complexity |
-| **SOPS with age** | Flux-native, lightweight, no external deps | Manual key backup required; no UI for key rotation |
+| **Manual credential entry** | Simple, transparent, no secrets in git | Credentials not recoverable if pod destroyed and recreated |
 | **Profilarr (manual) not Recyclarr (auto)** | User preference; UI-based control; flexible | Requires quarterly manual sync; potential profile drift |
 | **ClusterPlex on w3 + optional Unraid worker** | Distributed GPU transcoding; keeps main PMS on storage node; redundancy option | GPU node isolation; more infrastructure to manage |
 | **NFS for media (Unraid SPOF)** | Existing setup; proven; acceptable for homelab | No media redundancy; Unraid failure = no playback |
@@ -1962,13 +1801,14 @@ docs/
 
 ## Future Enhancements (Out of Scope)
 
-1. **Longhorn backup to Unraid**: Scheduled sync of config PVCs for long-term storage
-2. **External Docker worker on Unraid**: GPU redundancy if w3 fails (documented separately)
-3. **Prometheus/Grafana**: Metrics exporters for *arr apps + transcoding visualization
-4. **Notification webhooks**: Discord/Slack alerts for downloads/imports/transcoding errors
-5. **Additional *Arr apps**: Lidarr (music), Readarr (books), Bazarr (subtitles)
-6. **Automated Prowlarr indexer setup**: Init Job to configure indexers via API (complex chicken-egg problem)
-7. **Custom operator for *Arr stack**: GitOps-native controller for config management (out of scope for homelab)
+1. **SOPS encryption for secrets**: If credentials need to be recovered after pod recreation, add SOPS + git-based secret management
+2. **Longhorn backup to Unraid**: Scheduled sync of config PVCs for long-term storage
+3. **External Docker worker on Unraid**: GPU redundancy if w3 fails (documented separately)
+4. **Prometheus/Grafana**: Metrics exporters for *arr apps + transcoding visualization
+5. **Notification webhooks**: Discord/Slack alerts for downloads/imports/transcoding errors
+6. **Additional *Arr apps**: Lidarr (music), Readarr (books), Bazarr (subtitles)
+7. **Automated Prowlarr indexer setup**: Init Job to configure indexers via API (complex chicken-egg problem)
+8. **Custom operator for *Arr stack**: GitOps-native controller for config management (out of scope for homelab)
 
 ---
 
@@ -2000,4 +1840,4 @@ docs/
 **Last Updated**: February 15, 2026  
 **Status**: Ready for implementation  
 
-Start with Phase 1 (SOPS setup). One phase per day is sustainable for homelab work. Good luck!
+Start with Phase 1 (Storage setup). One phase per day is sustainable for homelab work. Good luck!
