@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: radarr
+  namespace: media
+  labels:
+    app: radarr
+spec:
+  serviceName: radarr-headless  # Links to headless service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radarr
+  # Use OnDelete to prevent automatic restarts during updates
+  updateStrategy:
+    type: OnDelete
+  # Ordered pod management (wait for ready before starting next)
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+      # Node affinity: REQUIRE storage nodes (w1/w2), STRONGLY prefer w1 primary
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100  # Strongly prefer primary node (w1) for active-passive
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      # Tolerations: Allow scheduling on Longhorn storage nodes
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        # Faster failover: Evict after 30 seconds instead of default 5 minutes
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      containers:
+        - name: radarr
+          image: linuxserver/radarr:5.2.5
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7878
+              name: http
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "UTC"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60  # 10 minutes total for first startup with migrations
+          volumeMounts:
+            - name: config  # Matches volumeClaimTemplate name
+              mountPath: /config
+  # PVC template - creates PVC automatically per pod
+  volumeClaimTemplates:
+    - metadata:
+        name: config  # Will create PVC: config-radarr-0
+        labels:
+          app: radarr
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-simple  # Custom StorageClass without node selectors
+        resources:
+          requests:
+            storage: 5Gi

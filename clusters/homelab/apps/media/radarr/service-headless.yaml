@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr-headless
+  namespace: media
+  labels:
+    app: radarr
+spec:
+  type: ClusterIP
+  clusterIP: None  # This makes it a headless service
+  selector:
+    app: radarr
+  ports:
+    - port: 7878
+      targetPort: 7878
+      protocol: TCP
+      name: http
