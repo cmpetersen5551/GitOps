@@ -58,12 +58,12 @@
       requests:
         storage: 200Gi  # Temporary transcode space
   ```
-- Add Longhorn PVC for symlink library (read-write, shared by Decypharr/Sonarr/Radarr/Plex):
+- Add Longhorn PVC for streaming media library (read-write, shared by Decypharr/Sonarr/Radarr/Plex):
   ```yaml
   apiVersion: v1
   kind: PersistentVolumeClaim
   metadata:
-    name: symlink-library
+    name: streaming-media
     namespace: media
   spec:
     accessModes:
@@ -177,7 +177,7 @@ parameters:
 
 **Verification**: 
 - `sops -d test-secret.yaml` works (outputs plaintext)
-- `kubectl get pvc -n media` shows all PVCs bound (media-library, transcode-cache, symlink-library, config-* PVCs)
+- `kubectl get pvc -n media` shows all PVCs bound (media-library, transcode-cache, streaming-media, config-* PVCs)
 - `kubectl get storageclass longhorn-rwx longhorn-simple` shows both StorageClasses ready
 
 ---
@@ -379,7 +379,7 @@ spec:
             - name: dfs-mount
               mountPath: /mnt/dfs
               mountPropagation: Bidirectional  # CRITICAL for FUSE sharing
-            - name: symlink-library
+            - name: streaming-media
               mountPath: /mnt/streaming-media    # Where symlinks are created
           securityContext:
             privileged: true  # REQUIRED for FUSE mount creation
@@ -453,9 +453,9 @@ spec:
           hostPath:
             path: /mnt/k8s/decypharr-dfs
             type: DirectoryOrCreate
-        - name: symlink-library
+        - name: streaming-media
           persistentVolumeClaim:
-            claimName: symlink-library
+            claimName: streaming-media
 ```
 
 **Services & Ingress**:
@@ -580,7 +580,7 @@ volumeMounts:
     mountPath: /config
   - name: dfs-mount
     mountPath: /mnt/dfs
-  - name: symlink-library
+  - name: streaming-media
     mountPath: /mnt/streaming-media
   - name: media
     mountPath: /mnt/media
@@ -637,9 +637,9 @@ volumes:
     hostPath:
       path: /mnt/k8s/decypharr-dfs
       type: DirectoryOrCreate
-  - name: symlink-library
+  - name: streaming-media
     persistentVolumeClaim:
-      claimName: symlink-library
+      claimName: streaming-media
   - name: media
     persistentVolumeClaim:
       claimName: media-library
@@ -874,7 +874,7 @@ spec:
               mountPath: /mnt/dfs
               readOnly: true
               mountPropagation: Bidirectional
-            - name: symlink-library
+            - name: streaming-media
               mountPath: /mnt/streaming-media
             - name: transcode
               mountPath: /transcode
@@ -908,9 +908,9 @@ spec:
           hostPath:
             path: /mnt/k8s/decypharr-dfs
             type: DirectoryOrCreate
-        - name: symlink-library
+        - name: streaming-media
           persistentVolumeClaim:
-            claimName: symlink-library
+            claimName: streaming-media
         - name: transcode
           persistentVolumeClaim:
             claimName: transcode-cache
@@ -1133,7 +1133,7 @@ spec:
       volumes:
         - name: streaming-media
           persistentVolumeClaim:
-            claimName: symlink-library
+            claimName: streaming-media
             readOnly: true
         - name: media
           persistentVolumeClaim:
@@ -1595,7 +1595,7 @@ kubectl get svc clusterplex-orchestrator -n media -o jsonpath='{.status.loadBala
 - ✅ **Longhorn RWX volumes use share-manager pod** (runs on w1/w2 VMs)
 - ✅ **Share-manager exposes volume via NFSv4** (network protocol, no kernel modules)
 - ✅ **w3 mounts via NFS** (LXC can mount NFS without issues)
-- ✅ **Result**: ClusterPlex Worker on w3 accesses `symlink-library` PVC transparently via NFS
+- ✅ **Result**: ClusterPlex Worker on w3 accesses `streaming-media` PVC transparently via NFS
 
 **What Works Where**:
 | Storage Type | w1/w2 (VMs) | w3 (LXC) |
@@ -1753,7 +1753,7 @@ sops -d sonarr/secrets.yaml
 - [ ] `.sops.yaml` in repo root with public key
 - [ ] Flux kustomizations configured for SOPS decryption
 - [ ] NFS PVCs bound: `kubectl get pvc -n media | grep nfs`
-- [ ] Symlink library PVC bound: `kubectl get pvc -n media symlink-library`
+- [ ] Streaming media PVC bound: `kubectl get pvc -n media streaming-media`
 
 **Tier 2: *Arr Apps**
 - [ ] Sonarr pod running on w1: `kubectl get pod sonarr-0 -n media -o wide`
@@ -1908,7 +1908,7 @@ clusters/homelab/apps/media/
 │   ├── pvc-transcode.yaml                (NEW - RW transcode cache for ClusterPlex)
 │   └── kustomization.yaml                (UPDATE)
 ├── storage/
-│   ├── pvc-symlink-library.yaml          (NEW - Longhorn 100Mi, RW for symlinks)
+│   ├── pvc-streaming-media.yaml          (NEW - Longhorn 100Mi, RW for streaming media/symlinks)
 │   └── kustomization.yaml                (UPDATE)
 └── README.md                             (NEW - Media stack deployment overview)
 
