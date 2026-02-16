@@ -1033,6 +1033,10 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
       volumes:
+        - name: streaming-media
+          persistentVolumeClaim:
+            claimName: symlink-library
+            readOnly: true
         - name: media
           persistentVolumeClaim:
             claimName: media-library
