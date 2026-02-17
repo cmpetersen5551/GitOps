@@ -27,6 +27,7 @@
 | App | Status | Storage | Replicas | Node |
 |-----|--------|---------|----------|------|
 | Sonarr | ✅ Running | Longhorn | 1/1 | k3s-w1 |
+| Radarr | ✅ Running | Longhorn | 1/1 | k3s-w1 |
 | Prowlarr | ⏸ Ready | Longhorn | 0/0 | (scaled down) |
 
 ### ✅ Infrastructure
@@ -40,7 +41,22 @@
 
 ---
 
-## Recent Changes (This Session)
+## Recent Changes (This Session - 2026-02-17)
+
+### Phase 2: Radarr Deployment Complete ✅
+- ✅ Radarr StatefulSet deployed (mirrors Sonarr architecture)
+- ✅ Service & Ingress routing configured
+- ✅ Pod running on k3s-w1 with Longhorn 5Gi PVC
+- ✅ Web UI accessible at radarr.homelab
+
+**Issues Resolved**:
+1. Image tag `5.2.5` → `latest` (exact tag didn't exist)
+2. Service port `7878` → `80` (standardized with Sonarr for Ingress compatibility)
+3. Removed invalid Traefik annotation `router.entrypoints: web,websecure` (doesn't match Traefik's `http`/`https` config)
+
+**Commits**: 5be33db (Radarr ingress fix), 6a932e5 (service port fix), b788d6f (image tag fix), 6dfa2b3 (initial deployment)
+
+## Previous Changes (Session 1 - 2026-02-15)
 
 ### Removed
 - ✏️ `clusters/homelab/infrastructure/seaweedfs/` (entire directory)

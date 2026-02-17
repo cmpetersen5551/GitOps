@@ -167,9 +167,10 @@ parameters:
 ---
 
 ### Phase 2: Core *Arr Apps (Foundation for Automation)
-**Estimated Time**: 1-2 hours deployment + 15-30min manual config
+**Estimated Time**: 1-2 hours deployment + 15-30min manual config  
+**Status**: ✅ COMPLETED (2026-02-17)
 
-#### 3. Sonarr (*first for API key generation*)
+#### 3. Sonarr (*first for API key generation*) - ✅ DEPLOYED
 - StatefulSet with:
   - Image: `linuxserver/sonarr:latest`
   - Longhorn PVC: `config-sonarr` (10Gi)
@@ -187,16 +188,22 @@ parameters:
   1. Access via ingress, wait 2-3 min for DB initialization
   2. Settings → General → Security → Note API Key (for Prowlarr configuration)
 
-#### 4. Radarr (*parallel with Sonarr*)
+#### 4. Radarr (*parallel with Sonarr*) - ✅ DEPLOYED
 - Same architecture as Sonarr, but:
   - Longhorn PVC: `config-radarr` (10Gi, can be larger if many movies)
   - Ingress: `radarr.homelab`
   - **Manual post-deploy**: Note API key from Settings → General → Security (for Prowlarr configuration)
 
 **Verification**: 
-- Both pods running on w1: `kubectl get pods -n media -o wide | grep -E "sonarr|radarr"`
-- Both ingresses accessible: `curl http://sonarr.homelab` returns Sonarr UI
-- API keys accessible from Settings UI
+- ✅ Both pods running on w1: `kubectl get pods -n media -o wide | grep -E "sonarr|radarr"`
+- ✅ Both ingresses accessible: `http://sonarr.homelab` and `http://radarr.homelab` return UI
+- ✅ API keys accessible from Settings UI
+
+**Deployment Notes**:
+- Sonarr service: port 80 → targetPort 8989 (ingress-compatible)
+- Radarr service: port 80 → targetPort 7878 (matches Sonarr pattern)
+- Ingress annotations: Must use `kubernetes.io/ingress.class: traefik` (not `router.entrypoints` which requires valid Traefik entrypoint names)
+- Traefik configured with `http`/`https` entrypoints, NOT `web`/`websecure`
 
 ---
 
