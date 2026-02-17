@@ -59,11 +59,6 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 30
-      # Init containers: Wait for Decypharr to be ready before starting Sonarr
-      initContainers:
-        - name: wait-for-decypharr
-          image: busybox:latest
-          command: ['sh', '-c', 'until nc -z decypharr.media.svc 8080; do echo "Waiting for Decypharr..."; sleep 5; done']
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
@@ -112,26 +107,6 @@ spec:
           volumeMounts:
             - name: config  # Matches volumeClaimTemplate name
               mountPath: /config
-            - name: streaming-media  # Longhorn RWX PVC for symlink library
-              mountPath: /mnt/streaming-media
-            - name: media-nfs  # Unraid NFS for permanent media library
-              mountPath: /mnt/media
-            - name: transcode-nfs  # Unraid NFS for transcode cache
-              mountPath: /mnt/transcode
-      # Volumes for shared media paths
-      volumes:
-        - name: streaming-media
-          persistentVolumeClaim:
-            claimName: pvc-streaming-media
-            readOnly: false
-        - name: media-nfs
-          persistentVolumeClaim:
-            claimName: pvc-media-nfs
-            readOnly: false
-        - name: transcode-nfs
-          persistentVolumeClaim:
-            claimName: pvc-transcode-nfs
-            readOnly: false
   # PVC template - creates PVC automatically per pod
   volumeClaimTemplates:
     - metadata:
