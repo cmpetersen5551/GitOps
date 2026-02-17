@@ -131,17 +131,17 @@ spec:
         resources:
           requests:
             storage: 5Gi
-      # Volumes for shared media paths
-      volumes:
-        - name: streaming-media
-          persistentVolumeClaim:
-            claimName: pvc-streaming-media
-            readOnly: false
-        - name: media-nfs
-          persistentVolumeClaim:
-            claimName: pvc-media-nfs
-            readOnly: false
-        - name: transcode-nfs
-          persistentVolumeClaim:
-            claimName: pvc-transcode-nfs
-            readOnly: false
+  # Volumes for shared media paths
+  volumes:
+    - name: streaming-media
+      persistentVolumeClaim:
+        claimName: pvc-streaming-media
+        readOnly: false
+    - name: media-nfs
+      persistentVolumeClaim:
+        claimName: pvc-media-nfs
+        readOnly: false
+    - name: transcode-nfs
+      persistentVolumeClaim:
+        claimName: pvc-transcode-nfs
+        readOnly: false
