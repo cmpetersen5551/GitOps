@@ -2,14 +2,106 @@
 
 **TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr DFS for streamed downloads via RealDebrid/UsenetExpress, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. All credentials are configured via application UIs.
 
-**Estimated Total Time**: 12-16 hours over multiple days
+**Current Status**: Phase 4 Complete (Core infrastructure + Download client deployed)  
+**Last Updated**: 2026-02-17  
+**Estimated Remaining Time**: 8-12 hours (Phases 5-8)
+
+---
+
+## Deployment Progress
+
+### ✅ Phase 1: Foundation (Storage Infrastructure)
+- **Status**: COMPLETED during initial cluster setup
+- NFS PVCs for Unraid media/transcode
+- Longhorn StorageClasses (RWO and RWX)
+- All storage infrastructure operational
+
+### ✅ Phase 2: Core *Arr Apps
+- **Status**: COMPLETED (2026-02-17)
+- Sonarr, Radarr, Prowlarr, Profilarr deployed
+- All apps running on k3s-w1 with HA-capable config
+- Web UIs accessible via Traefik ingress
+
+### ✅ Phase 3: Indexer Management
+- **Status**: COMPLETED (2026-02-17)
+- Prowlarr deployed and operational
+- Profilarr deployed (quality profile management)
+- Manual indexer configuration pending (requires user API keys)
+
+### ✅ Phase 4: Download Client (Decypharr)
+- **Status**: COMPLETED (2026-02-17)
+- Decypharr deployed with DFS + NFS export
+- Critical infrastructure fix: nfs-common installed on storage nodes
+- Streaming-media RWX volume operational (1Gi)
+- Web UI accessible, ready for initial setup
+
+### ⏳ Phase 5: Sonarr/Radarr ↔ Decypharr Integration
+- **Status**: PENDING
+- Requires: Init containers for mount ordering
+- Requires: Volume mounts for `/mnt/dfs` and `/mnt/streaming-media`
+- Requires: Download client configuration in UIs
+
+### ⏳ Phase 6: Quality Profile Management
+- **Status**: PENDING
+- Manual setup via Profilarr UI
+- Sync TRaSH Guides profiles to Sonarr/Radarr
+
+### ⏳ Phase 7: Media Server (Plex + ClusterPlex)
+- **Status**: PENDING
+- Plex StatefulSet deployment
+- Intel GPU Device Plugin (w3)
+- ClusterPlex Orchestrator + Workers
+- External worker on Unraid (optional)
+
+### ⏳ Phase 8: Plex Watchlist Integration (Pulsarr)
+- **Status**: PENDING
+- Automated watchlist → request pipeline
 
 ---
 
 ## Deployment Order & Phases
 
 ### Phase 1: Foundation (Storage Infrastructure)
-**Estimated Time**: 30-45 minutes
+**Estimated Time**: 30-45 minutes  
+**Status**: ✅ COMPLETED (Pre-existing from cluster setup)
+
+**Deployed Storage:**
+- ✅ Namespace `media` created
+- ✅ NFS PVC `pvc-media-nfs` (1Ti ROX from Unraid) - Permanent media library
+- ✅ NFS PVC `pvc-transcode-nfs` (200Gi RWX from Unraid) - Transcode cache
+- ✅ Longhorn PVC `pvc-streaming-media` (1Gi RWX) - Symlink library
+- ✅ Config PVCs for all apps (Longhorn RWO):
+  - `config-sonarr-0` (5Gi)
+  - `config-radarr-0` (5Gi)
+  - `config-prowlarr-0` (2Gi)
+  - `config-profilarr-0` (2Gi)
+  - `config-decypharr-0` (10Gi)
+
+**StorageClasses:**
+- ✅ `longhorn-simple` (RWO) - Config storage
+- ✅ `longhorn-rwx` (RWX) - Streaming media symlink library
+- ✅ `nfs-unraid` (NFS) - Permanent media and transcode
+
+**Longhorn RWX Configuration:**
+```yaml
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: longhorn-rwx
+provisioner: driver.longhorn.io
+parameters:
+  numberOfReplicas: "2"
+  staleReplicaTimeout: "30"
+  fsType: "ext4"
+  dataLocality: "best-effort"
+  replicaAutoBalance: "least-effort"
+  disableRevisionCounter: "true"
+  dataEngine: "v1"
+  accessMode: "rwd"  # Read-Write-Delete (required for RWX)
+  nfsOptions: "vers=4.1,soft,timeo=600,retrans=5"
+```
+
+**Note**: Longhorn RWX creates a dedicated NFSv4 share-manager pod per volume. Adds ~10-30% overhead vs direct block storage, but provides HA failover for shared volumes.
 
 #### 1. Base Media Namespace & Storage PVCs
 - Namespace `media` already exists, verify: `kubectl get namespace media`
@@ -170,6 +262,44 @@ parameters:
 **Estimated Time**: 1-2 hours deployment + 15-30min manual config  
 **Status**: ✅ COMPLETED (2026-02-17)
 
+**Deployed Applications:**
+- ✅ Sonarr - Running on k3s-w1
+- ✅ Radarr - Running on k3s-w1
+- ✅ Prowlarr - Running on k3s-w1
+- ✅ Profilarr - Running on k3s-w1
+
+**Key Learnings & Configuration Notes:**
+
+#### Service Configuration Pattern
+All services follow this pattern for Traefik ingress compatibility:
+```yaml
+ports:
+  - name: http
+    port: 80        # Ingress-facing port
+    targetPort: XXXX  # Application port (8989 for Sonarr, 7878 for Radarr, etc.)
+```
+
+#### Ingress Annotations
+**Working configuration:**
+```yaml
+annotations:
+  kubernetes.io/ingress.class: traefik
+```
+
+**DO NOT use these annotations** (causes Traefik errors):
+- ❌ `traefik.ingress.kubernetes.io/router.entrypoints: web`
+- ❌ `traefik.ingress.kubernetes.io/router.entrypoints: websecure`
+
+**Reason**: Traefik in this cluster uses `http`/`https` entrypoint names (from Traefik Helm chart), not `web`/`websecure` (from Traefik Pilot defaults). The simple `kubernetes.io/ingress.class: traefik` annotation is sufficient.
+
+#### Image Selection
+- **Sonarr**: `linuxserver/sonarr:latest` ✅
+- **Radarr**: `linuxserver/radarr:latest` ✅
+- **Prowlarr**: `linuxserver/prowlarr:latest` ✅
+- **Profilarr**: First-party images unavailable, deployed from fork
+
+**Note**: LinuxServer.io images are stable and well-maintained for homelab use.
+
 #### 3. Sonarr (*first for API key generation*) - ✅ DEPLOYED
 - StatefulSet with:
   - Image: `linuxserver/sonarr:latest`
@@ -261,7 +391,109 @@ parameters:
 ---
 
 ### Phase 4: Download Client (Decypharr with DFS)
-**Estimated Time**: 2-3 hours (includes mount troubleshooting)
+**Estimated Time**: 2-3 hours (includes mount troubleshooting)  
+**Status**: ✅ COMPLETED (2026-02-17)
+
+**Deployment Summary:**
+- ✅ Decypharr StatefulSet running 2/2 containers on k3s-w1
+- ✅ Streaming-media PVC (1Gi Longhorn RWX) bound and mounted
+- ✅ DFS cache (500Gi EmptyDir) mounted with FUSE
+- ✅ NFS export (rclone sidecar) operational on port 2049
+- ✅ Web UI accessible at http://decypharr.homelab:8282
+
+#### Critical Infrastructure Requirement: nfs-common
+
+**Problem Encountered:**
+```
+MountVolume.MountDevice failed: mount failed: exit status 32
+Output: fsconfig() failed: NFS: mount program didn't pass remote address
+```
+
+**Root Cause:** Longhorn RWX volumes use NFSv4 internally via share-manager pods. The host's CSI driver requires `mount.nfs` binary (provided by `nfs-common` package on Debian/Ubuntu).
+
+**Solution Applied:**
+```bash
+# Install nfs-common on both storage nodes (w1, w2)
+kubectl debug node/k3s-w1 -it --image=debian:trixie -- chroot /host bash -c \
+  "apt-get update && apt-get install -y nfs-common"
+
+kubectl debug node/k3s-w2 -it --image=debian:trixie -- chroot /host bash -c \
+  "apt-get update && apt-get install -y nfs-common"
+```
+
+**This is a host-level requirement, not a Kubernetes resource.** Must be added to node provisioning automation.
+
+See [LONGHORN_NODE_SETUP.md](./LONGHORN_NODE_SETUP.md) for details.
+
+#### Image & Configuration
+
+**Correct Image:** `cy01/blackhole:latest`
+
+**Failed alternatives during debugging:**
+- ❌ `ghcr.io/cowboy/decypharr:latest` - 403 Forbidden (private/removed)
+- ❌ `sirrobot01/decypharr:latest` - Does not exist
+
+**Port:** 8282 (not 8080 as initially configured)
+
+**Health Probes:** Removed entirely - all endpoints return `401 Unauthorized` until auth is configured via web UI. Kubernetes keeps pod running based on process health.
+
+**Rclone Configuration:** Removed invalid `--nfs-hide-dot-file=true` flag (not supported by rclone)
+
+#### Storage Configuration
+
+**Streaming Media PVC Size Evolution:**
+- Initial: 100Gi → Too large (disk space exhausted, scheduling failures)
+- Revised: 10Gi → Still excessive for symlinks
+- **Final: 1Gi** → Correct size (symlinks are ~100 bytes each, even 10K symlinks < 1MB)
+
+**Rationale:** Decypharr creates symbolic links in `/mnt/streaming-media` pointing to DFS cache (EmptyDir). The PVC only stores symlinks, not media files.
+
+**StorageClass Configuration:**
+```yaml
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: longhorn-rwx
+provisioner: driver.longhorn.io
+parameters:
+  numberOfReplicas: "2"
+  accessMode: "rwd"  # Read-Write-Delete (required for RWX)
+  nfsOptions: "vers=4.1,soft,timeo=600,retrans=5"
+```
+
+**NFS Version Selection:** Using NFSv4.1 for broad kernel compatibility. NFSv4.2 would also work but NFSv4.1 was chosen for maximum compatibility across kernel versions.
+
+#### Services
+
+1. **decypharr** (ClusterIP) - API/UI on port 8282
+2. **decypharr-nfs** (ClusterIP) - NFS export on port 2049 for remote workers (ClusterPlex w3)
+3. **decypharr-headless** - StatefulSet DNS resolution
+
+#### Verification Performed
+
+```bash
+# Pod status
+kubectl get pods -n media decypharr-0
+# Output: 2/2 Running (decypharr + rclone-nfs-server containers)
+
+# Streaming media mount
+kubectl exec decypharr-0 -n media -c decypharr -- ls -la /mnt/streaming-media
+# Output: Writable directory with lost+found
+
+# DFS FUSE mount
+kubectl exec decypharr-0 -n media -c decypharr -- mount | grep fuse
+# Output: /mnt/dfs mounted as fuse
+
+# NFS export
+kubectl exec decypharr-0 -n media -c rclone-nfs-server -- netstat -tlnp | grep 2049
+# Output: Listening on :2049
+
+# Service endpoints
+kubectl get endpoints -n media decypharr decypharr-nfs
+# Output: Both services have pod IP endpoints
+```
+
+See [DECYPHARR_DEPLOYMENT_NOTES.md](./DECYPHARR_DEPLOYMENT_NOTES.md) for comprehensive troubleshooting and configuration details.
 
 #### 7. Decypharr (*separate pod with FUSE hostPath mount*)
 

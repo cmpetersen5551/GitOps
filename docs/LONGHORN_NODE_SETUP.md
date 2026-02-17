@@ -2,6 +2,35 @@
 
 This document describes the required node configuration for Longhorn storage on w1 and w2.
 
+## Prerequisites
+
+### NFS Client Utilities (CRITICAL for RWX Volumes)
+
+Longhorn RWX volumes use NFSv4 internally via share-manager pods. **All nodes that will mount RWX volumes MUST have NFS client utilities installed.**
+
+**For Debian/Ubuntu:**
+```bash
+# SSH to each node and install nfs-common
+apt-get update && apt-get install -y nfs-common
+
+# Verify installation
+dpkg -l | grep nfs-common
+mount.nfs --version
+```
+
+**For RHEL/CentOS/Rocky:**
+```bash
+yum install -y nfs-utils
+```
+
+**Why this matters:**
+- Without `nfs-common`, RWX volume mounts fail with: `mount failed: NFS: mount program didn't pass remote address`
+- This is a **host-level dependency**, not a Kubernetes resource
+- Must be installed on **ALL nodes** (control plane + workers) that will use RWX volumes
+- Longhorn's CSI driver relies on the host's `mount.nfs` binary to mount share-manager NFS exports
+
+See [GitHub Issue #8508](https://github.com/longhorn/longhorn/issues/8508) for background.
+
 ## Required Node Labels
 
 Node labels are considered infrastructure and are applied outside of Flux GitOps:
