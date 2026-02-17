@@ -6,5 +6,6 @@ resources:
   - ./radarr
   - ./prowlarr
   - ./profilarr
+  - ./decypharr
   - ./nfs
   - ./longhorn

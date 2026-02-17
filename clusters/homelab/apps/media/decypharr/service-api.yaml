@@ -1,0 +1,18 @@
+---
+# ClusterIP Service for Decypharr API
+apiVersion: v1
+kind: Service
+metadata:
+  name: decypharr
+  namespace: media
+  labels:
+    app: decypharr
+spec:
+  type: ClusterIP
+  selector:
+    app: decypharr
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
