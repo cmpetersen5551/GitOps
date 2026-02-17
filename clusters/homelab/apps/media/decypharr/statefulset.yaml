@@ -109,6 +109,11 @@ spec:
               mountPath: /mnt/dfs
             - name: streaming-media
               mountPath: /mnt/streaming-media
+            - name: media-nfs  # Read-only access to Unraid media
+              mountPath: /mnt/media
+              readOnly: true
+            - name: transcode-nfs  # Read-write access to Unraid transcode
+              mountPath: /mnt/transcode
         # rclone NFS server sidecar - exposes DFS as NFS for remote access
         - name: rclone-nfs-server
           image: rclone/rclone:latest
@@ -134,6 +139,11 @@ spec:
             - name: dfs
               mountPath: /mnt/dfs
               readOnly: true
+            - name: media-nfs  # Read-only access to Unraid media
+              mountPath: /mnt/media
+              readOnly: true
+            - name: transcode-nfs  # Read-write access to Unraid transcode
+              mountPath: /mnt/transcode
       # Volumes
       volumes:
         - name: dfs
@@ -142,3 +152,9 @@ spec:
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
+        - name: media-nfs
+          persistentVolumeClaim:
+            claimName: pvc-media-nfs
+        - name: transcode-nfs
+          persistentVolumeClaim:
+            claimName: pvc-transcode-nfs
