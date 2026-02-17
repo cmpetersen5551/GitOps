@@ -75,7 +75,7 @@ spec:
       # Decypharr main container with FUSE client
       containers:
         - name: decypharr
-          image: ghcr.io/cowboy/decypharr:latest
+          image: sirrobot01/decypharr:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true  # Required for FUSE mount
@@ -83,7 +83,7 @@ spec:
               add:
                 - SYS_ADMIN
           ports:
-            - containerPort: 8080
+            - containerPort: 8282
               name: http
           env:
             - name: PUID
@@ -105,7 +105,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /api/health
-              port: 8080
+              port: 8282
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -113,7 +113,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /api/health
-              port: 8080
+              port: 8282
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
@@ -121,7 +121,7 @@ spec:
           startupProbe:
             httpGet:
               path: /api/health
-              port: 8080
+              port: 8282
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
