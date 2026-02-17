@@ -1,0 +1,18 @@
+---
+# ClusterIP Service for Profilarr web UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: profilarr
+  namespace: media
+  labels:
+    app: profilarr
+spec:
+  type: ClusterIP
+  selector:
+    app: profilarr
+  ports:
+    - name: http
+      port: 80
+      targetPort: 6868
+      protocol: TCP

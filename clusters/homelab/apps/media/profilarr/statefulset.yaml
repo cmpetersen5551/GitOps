@@ -1,0 +1,115 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: profilarr
+  namespace: media
+  labels:
+    app: profilarr
+spec:
+  serviceName: profilarr-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: profilarr
+  # Use OnDelete to prevent automatic restarts during updates
+  updateStrategy:
+    type: OnDelete
+  # Ordered pod management (wait for ready before starting next)
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      labels:
+        app: profilarr
+    spec:
+      # Node affinity: REQUIRE storage nodes (w1/w2), STRONGLY prefer w1 primary
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100  # Strongly prefer primary node (w1) for active-passive
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      # Tolerations: Allow scheduling on Longhorn storage nodes
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        # Faster failover: Evict after 30 seconds instead of default 5 minutes
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      containers:
+        - name: profilarr
+          image: ghcr.io/sirrobot01/profilarr:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6868
+              name: http
+          env:
+            - name: TZ
+              value: "UTC"
+            - name: PROFILARR_PORT
+              value: "6868"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 6868
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 6868
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /
+              port: 6868
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          volumeMounts:
+            - name: config
+              mountPath: /config
+  # PVC template - creates PVC automatically per pod
+  volumeClaimTemplates:
+    - metadata:
+        name: config
+        labels:
+          app: profilarr
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-simple
+        resources:
+          requests:
+            storage: 2Gi

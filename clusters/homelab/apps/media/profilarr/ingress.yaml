@@ -1,0 +1,22 @@
+---
+# Ingress for Profilarr web UI access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: profilarr
+  namespace: media
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: profilarr.homelab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: profilarr
+                port:
+                  number: 80
