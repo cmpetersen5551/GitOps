@@ -4,7 +4,7 @@ metadata:
   name: radarr
   namespace: media
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    kubernetes.io/ingress.class: traefik
 spec:
   ingressClassName: traefik
   rules:
