@@ -18,4 +18,4 @@ spec:
   storageClassName: longhorn-rwx
   resources:
     requests:
-      storage: 100Gi  # Longhorn RWX volume, symlinks will use minimal space
+      storage: 1Gi  # Longhorn RWX volume - symlinks only, minimal space needed
