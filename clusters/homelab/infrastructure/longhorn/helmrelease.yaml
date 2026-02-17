@@ -47,6 +47,9 @@ spec:
       replicaSoftAntiAffinity: false  # CRITICAL: Must be false for 2-node
       replicaAutoBalance: least-effort  # Balance replicas across nodes
       
+      # Taint toleration for storage nodes (required for share-manager pods on tainted nodes)
+      taintToleration: "node.longhorn.io/storage=enabled:NoSchedule"
+      
       # Node and disk settings
       createDefaultDiskLabeledNodes: true
       defaultDataPath: /var/lib/longhorn
