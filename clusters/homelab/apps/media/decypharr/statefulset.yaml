@@ -104,25 +104,25 @@ spec:
               memory: 2Gi
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /
               port: 8282
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /api/health
+              path: /
               port: 8282
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           startupProbe:
             httpGet:
-              path: /api/health
+              path: /
               port: 8282
-            initialDelaySeconds: 30
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
