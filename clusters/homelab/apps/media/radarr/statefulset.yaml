@@ -118,6 +118,20 @@ spec:
               mountPath: /mnt/media
             - name: transcode-nfs  # Unraid NFS for transcode cache
               mountPath: /mnt/transcode
+      # Volumes for shared media paths
+      volumes:
+        - name: streaming-media
+          persistentVolumeClaim:
+            claimName: pvc-streaming-media
+            readOnly: false
+        - name: media-nfs
+          persistentVolumeClaim:
+            claimName: pvc-media-nfs
+            readOnly: false
+        - name: transcode-nfs
+          persistentVolumeClaim:
+            claimName: pvc-transcode-nfs
+            readOnly: false
   # PVC template - creates PVC automatically per pod
   volumeClaimTemplates:
     - metadata:
@@ -131,17 +145,4 @@ spec:
         resources:
           requests:
             storage: 5Gi
-  # Volumes for shared media paths
-  volumes:
-    - name: streaming-media
-      persistentVolumeClaim:
-        claimName: pvc-streaming-media
-        readOnly: false
-    - name: media-nfs
-      persistentVolumeClaim:
-        claimName: pvc-media-nfs
-        readOnly: false
-    - name: transcode-nfs
-      persistentVolumeClaim:
-        claimName: pvc-transcode-nfs
-        readOnly: false
+
