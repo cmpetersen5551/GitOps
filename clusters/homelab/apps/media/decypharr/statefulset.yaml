@@ -75,7 +75,7 @@ spec:
       # Decypharr main container with FUSE client
       containers:
         - name: decypharr
-          image: sirrobot01/decypharr:latest
+          image: cy01/blackhole:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true  # Required for FUSE mount
