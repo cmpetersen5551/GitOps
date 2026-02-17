@@ -3,4 +3,3 @@ kind: Kustomization
 resources:
   - pvc-media.yaml
   - pvc-transcode.yaml
-  - ../../infrastructure/storage/nfs/storageclass.yaml

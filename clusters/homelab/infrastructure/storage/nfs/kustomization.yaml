@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - pv-nfs-media.yaml
   - pv-nfs-transcode.yaml
+  - storageclass.yaml
