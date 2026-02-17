@@ -60,7 +60,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: radarr
-          image: linuxserver/radarr:5.2.5
+          image: linuxserver/radarr:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7878
