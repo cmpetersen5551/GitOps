@@ -1,11 +1,12 @@
 ---
-# Longhorn RWX PVC for streaming media library (symlinks)
+# NFS PVC for streaming media library (symlinks via Decypharr)
 # Used by: Decypharr (creates symlinks), Sonarr/Radarr (organize), 
 #          Plex (reads + serves), ClusterPlex (transcodes)
 # Architecture: Decypharr creates symlinks pointing to /mnt/dfs (RealDebrid cache)
 #              Sonarr/Radarr organize those symlinks into proper folder structure
 #              Plex aggregates this library with /mnt/media (permanent library)
 #              ClusterPlex workers read streaming content for GPU transcoding
+# Note: Using NFS (Unraid) instead of Longhorn RWX (not configured in HelmRelease)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -14,7 +15,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany  # RWX: Multiple pods can read/write simultaneously
-  storageClassName: longhorn-rwx
+  storageClassName: nfs-unraid
   resources:
     requests:
-      storage: 1Gi  # Size for symlinks + metadata (symlinks are just pointers, 1Gi is generous)
+      storage: 100Gi  # NFS mount, symlinks will use minimal space
