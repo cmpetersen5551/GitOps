@@ -23,4 +23,4 @@ parameters:
   # RWX support - Longhorn creates NFSv4 share-manager pod for this StorageClass
   accessMode: "rwd"  # Read-Write-Delete (required for RWX)
   # NFS options for client mounts
-  nfsOptions: "soft,timeo=600,retrans=5"
+  nfsOptions: "vers=4.2,soft,timeo=600,retrans=5"
