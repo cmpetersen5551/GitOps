@@ -64,9 +64,6 @@ spec:
         - name: media-nfs
           persistentVolumeClaim:
             claimName: pvc-media-nfs
-        - name: transcode-nfs
-          persistentVolumeClaim:
-            claimName: pvc-transcode-nfs
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
@@ -117,8 +114,6 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library (read-only)
               mountPath: /mnt/media
-            - name: transcode-nfs  # Unraid transcode cache (read-write)
-              mountPath: /mnt/transcode
   # PVC template - creates PVC automatically per pod
   volumeClaimTemplates:
     - metadata:
