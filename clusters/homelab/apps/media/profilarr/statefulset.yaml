@@ -8,7 +8,7 @@ metadata:
     app: profilarr
 spec:
   serviceName: profilarr-headless
-  replicas: 0  # Disabled - image not available. Quality profiles managed manually via TRaSH Guides.
+  replicas: 1
   selector:
     matchLabels:
       app: profilarr
@@ -57,7 +57,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: profilarr
-          image: ghcr.io/sirrobot01/profilarr:latest
+          image: santiagosayshey/profilarr:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 6868
