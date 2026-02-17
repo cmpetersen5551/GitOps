@@ -17,4 +17,4 @@ spec:
   storageClassName: longhorn-rwx
   resources:
     requests:
-      storage: 100Gi  # Size for symlinks + metadata (can be expanded later)
+      storage: 10Gi  # Size for symlinks + metadata (symlinks are just pointers)
