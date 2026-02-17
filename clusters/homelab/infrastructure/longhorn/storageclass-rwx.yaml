@@ -1,0 +1,26 @@
+---
+# Longhorn RWX (Read-Write-Many) StorageClass for shared media libraries
+# Used by: Decypharr (symlink library), Sonarr/Radarr/Plex (shared access), ClusterPlex (transcode output)
+# RWX is implemented via NFSv4 share-manager pod in longhorn-system namespace
+# Performance: ~10-30% overhead vs RWO (direct block storage)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-rwx
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "2"
+  staleReplicaTimeout: "30"
+  fromBackup: ""
+  fsType: "ext4"
+  dataLocality: "best-effort"
+  replicaAutoBalance: "least-effort"
+  disableRevisionCounter: "true"
+  dataEngine: "v1"
+  # RWX support - Longhorn creates NFSv4 share-manager pod for this StorageClass
+  accessMode: "rwd"  # Read-Write-Delete (required for RWX)
+  # NFS options for client mounts
+  nfsOptions: "soft,timeo=600,retrans=5"
