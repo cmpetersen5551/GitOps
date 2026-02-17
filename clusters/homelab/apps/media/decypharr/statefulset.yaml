@@ -143,7 +143,6 @@ spec:
             - nfs
             - /mnt/dfs
             - --addr=0.0.0.0:2049
-            - --nfs-hide-dot-file=true
           ports:
             - containerPort: 2049
               name: nfs
