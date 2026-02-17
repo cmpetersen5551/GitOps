@@ -57,7 +57,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: profilarr
-          image: ghcr.io/sirrobot01/profilarr:latest
+          image: ghcr.io/sirrobot01/profilarr:release
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 6868
