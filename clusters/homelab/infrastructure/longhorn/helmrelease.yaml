@@ -50,6 +50,11 @@ spec:
       # Taint toleration for storage nodes (required for share-manager pods on tainted nodes)
       taintToleration: "node.longhorn.io/storage=enabled:NoSchedule"
       
+      # CRITICAL: Restrict system-managed components (share-manager, instance-manager, etc.) to storage nodes only
+      # Without this, share-manager pods can schedule on any node (including cp1 with no storage)
+      # Issue: https://github.com/longhorn/longhorn/issues/xxx
+      systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"
+      
       # Node and disk settings
       createDefaultDiskLabeledNodes: true
       defaultDataPath: /var/lib/longhorn
