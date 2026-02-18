@@ -79,6 +79,35 @@ defaultSettings:
   replicaAutoBalance: least-effort   # Don't ping-pong replicas
 ```
 
+### 5. System-Managed Components Scheduling (2026-02-18)
+
+**Problem**: Longhorn's RWX volumes were attaching to control plane nodes (cp1) instead of storage nodes (w1/w2).
+
+**Root Cause**: Share-manager pods (system-managed components that provide NFSv4 for RWX volumes) had no nodeSelector restriction and were freely scheduling to any available node.
+
+**Critical Discovery**: StorageClass parameters like `diskSelector`, `nodeSelector`, or even taint tolerations do NOT control share-manager placement. They only affect the underlying Longhorn volume replica placement.
+
+**Solution**: Add explicit `systemManagedComponentsNodeSelector` to HelmRelease defaultSettings:
+
+```yaml
+defaultSettings:
+  # Restrict system-managed components to storage nodes
+  systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"
+  
+  # Ensure they tolerate the storage node taint
+  taintToleration: "node.longhorn.io/storage=enabled:NoSchedule"
+```
+
+This controls placement of:
+- Share-manager pods (NFSv4 for RWX volumes) ← **CRITICAL for RWX volumes**
+- Instance-manager pods (replica management)
+- Backing-image-manager pods (image management)
+- Replica-rebuild pods (during failover)
+
+**Result**: All RWX volumes now attach to storage nodes only, fixing symlink library mounting for Decypharr.
+
+**Reference**: See [LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md](./LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md) for complete analysis.
+
 **Why**: With `replicaSoftAntiAffinity: true`, Longhorn tries to spread replicas to 3+ nodes. On 2 nodes, this fails. Must be `false`.
 
 ### 5. StorageClass Simplification

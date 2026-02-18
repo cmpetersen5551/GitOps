@@ -21,6 +21,72 @@ Decypharr is deployed as a StatefulSet with two containers:
 - **Node Affinity**: Requires storage nodes (w1/w2), prefers w1
 - **Tolerations**: `node.longhorn.io/storage=enabled:NoSchedule`
 
+## Critical Fix Applied (2026-02-18): Longhorn RWX Volume Scheduling
+
+### Issue
+
+Decypharr pod was stuck in `ContainerCreating` because:
+1. Decypharr pod scheduled to k3s-w1 (storage node) ✅
+2. RWX volume attached to **k3s-cp1** (control plane, no storage) ❌
+3. CSI driver couldn't mount volume on cp1 (no Longhorn instance manager)
+4. Pod couldn't start, RWX volume stuck "attaching"
+
+### Root Cause
+
+Longhorn's **share-manager pods** (which create the NFSv4 share for RWX volumes) were scheduling to ANY node, including cp1.
+- StorageClass parameters like `diskSelector` and `nodeSelector` do NOT control share-manager placement
+- System-managed components (share-manager, instance-manager, CSI driver) need separate nodeSelector configuration
+- Without it, share-manager could run on cp1, causing volume attachment failures on storage nodes
+
+### Solution Applied
+
+**Updated HelmRelease** (`clusters/homelab/infrastructure/longhorn/helmrelease.yaml`):
+
+```yaml
+defaultSettings:
+  taintToleration: "node.longhorn.io/storage=enabled:NoSchedule"
+  
+  # CRITICAL: Restrict system-managed components to storage nodes only
+  systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"
+```
+
+This ensures:
+- ✅ Share-manager pods run ONLY on w1/w2 (labeled with `node.longhorn.io/storage=enabled`)
+- ✅ Instance-manager pods run ONLY on w1/w2
+- ✅ CSI driver pods can run on all nodes (unchanged)
+- ✅ RWX volumes attach to the correct storage node
+
+**Removed invalid StorageClass parameter**:
+```yaml
+# REMOVED - This doesn't control share-manager placement
+diskSelector: '{"node.longhorn.io/storage":"enabled"}'
+```
+
+### Verification
+
+**Before fix**:
+```
+Volume: pvc-c3493aa8-5df2-4ec2-be07-7517cf4be8b0
+Node ID: k3s-cp1          ← Wrong!
+State: attaching          ← Stuck
+Robustness: unknown
+```
+
+**After fix**:
+```
+Volume: pvc-6d1828bc-24c7-4d67-b446-7584883668f5
+Node ID: k3s-w2           ← Correct storage node
+State: attached           ← Success
+Robustness: healthy
+```
+
+**Impact**: 
+- Decypharr pod now **2/2 Running** on k3s-w1
+- Web UI accessible at http://decypharr.homelab
+- All subsequent RWX volumes will attach correctly
+
+See [LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md](./LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md) for detailed learning.
+
 ## Key Configuration Decisions
 
 ### 1. Image Selection

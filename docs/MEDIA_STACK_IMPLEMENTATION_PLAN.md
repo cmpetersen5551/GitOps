@@ -29,11 +29,15 @@
 - Manual indexer configuration pending (requires user API keys)
 
 ### ✅ Phase 4: Download Client (Decypharr)
-- **Status**: COMPLETED (2026-02-17)
-- Decypharr deployed with DFS + NFS export
-- Critical infrastructure fix: nfs-common installed on storage nodes
-- Streaming-media RWX volume operational (1Gi)
-- Web UI accessible, ready for initial setup
+- **Status**: FULLY COMPLETED (2026-02-18)
+- ✅ Decypharr deployed with DFS + NFS export
+- ✅ Critical infrastructure fix: nfs-common installed on storage nodes
+- ✅ Streaming-media RWX volume operational (1Gi) on storage node (k3s-w2)
+- ✅ Web UI accessible at http://decypharr.homelab
+- ✅ **CRITICAL FIX APPLIED**: Longhorn share-manager pods now scheduled to storage nodes only
+  - Added `systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"` to HelmRelease
+  - RWX volumes now attach to correct storage node (w2), not control plane (cp1)
+  - See LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md for detailed learning
 
 ### ⏳ Phase 5: Sonarr/Radarr ↔ Decypharr Integration
 - **Status**: IN PROGRESS (2026-02-17)
