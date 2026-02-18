@@ -2,9 +2,9 @@
 
 **TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr DFS for streamed downloads via RealDebrid/UsenetExpress, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. All credentials are configured via application UIs.
 
-**Current Status**: Phase 4 Complete (Core infrastructure + Download client deployed)  
+**Current Status**: Phase 5 In Progress (Media library mounting complete, DFS integration pending)  
 **Last Updated**: 2026-02-17  
-**Estimated Remaining Time**: 8-12 hours (Phases 5-8)
+**Estimated Remaining Time**: 6-10 hours (Phases 5-8)
 
 ---
 
@@ -36,10 +36,15 @@
 - Web UI accessible, ready for initial setup
 
 ### ⏳ Phase 5: Sonarr/Radarr ↔ Decypharr Integration
-- **Status**: PENDING
-- Requires: Init containers for mount ordering
-- Requires: Volume mounts for `/mnt/dfs` and `/mnt/streaming-media`
-- Requires: Download client configuration in UIs
+- **Status**: IN PROGRESS (2026-02-17)
+- ✅ **COMPLETED**: Media library mounting from Unraid NFS share
+  - Created `nfs-unraid` StorageClass
+  - Added `/mnt/media` mounts to Sonarr, Radarr, Decypharr containers
+  - All pods have read-only access to Unraid media (downloads, movies, tvshows, etc.)
+  - Server: `192.168.1.29`, Path: `/mnt/user/media`
+- ⏳ **PENDING**: Init containers for mount ordering (DFS integration)
+- ⏳ **PENDING**: Volume mounts for `/mnt/dfs` and `/mnt/streaming-media` (download client integration)
+- ⏳ **PENDING**: Download client configuration in Sonarr/Radarr UIs
 
 ### ⏳ Phase 6: Quality Profile Management
 - **Status**: PENDING
@@ -736,6 +741,55 @@ spec:
 
 ### Phase 5: Sonarr/Radarr ↔ Decypharr Integration
 **Estimated Time**: 1-2 hours
+
+#### 7. Media Library Mounting (from Unraid NFS) - ✅ COMPLETED (2026-02-17)
+
+**Objective**: Give Sonarr, Radarr, and Decypharr read-only access to the permanent media library on Unraid.
+
+**What was deployed**:
+1. **StorageClass**: `nfs-unraid` (kubernetes.io/nfs provisioner)
+   - Location: `clusters/homelab/infrastructure/storage/nfs/storageclass.yaml`
+   - Allows persistent volumes to bind to Unraid NFS shares
+
+2. **Updated StatefulSets**: Added `/mnt/media` volume mounts
+   - **Sonarr**: `pvc-media-nfs` mounted at `/mnt/media` (read-only)
+   - **Radarr**: `pvc-media-nfs` mounted at `/mnt/media` (read-only)
+   - **Decypharr**: `pvc-media-nfs` mounted at `/mnt/media` (read-only, both containers)
+
+**Configuration Details**:
+- **Server**: 192.168.1.29 (Unraid)
+- **NFS Export Path**: `/mnt/user/media`
+- **Access Mode**: ReadOnlyMany (ROX) - read-only from multiple pods
+- **PVC**: `pvc-media-nfs` (1Ti capacity)
+- **Mount Point**: `/mnt/media` (consistent across all pods)
+
+**Contents Accessible**:
+```
+/mnt/media/
+├── downloads/        # Incoming download files
+├── movies/          # Movie library (24K entries)
+├── tvshows/         # TV show library
+├── dvr_recordings/  # Recorded TV
+├── music/           # Music library
+└── screensavers/    # Screensaver media
+```
+
+**Verification**:
+```bash
+# Verify all pods have access
+kubectl exec -n media sonarr-0 -- ls -lh /mnt/media
+kubectl exec -n media radarr-0 -- ls -lh /mnt/media
+kubectl exec -n media decypharr-0 -c decypharr -- ls -lh /mnt/media
+
+# All output should show the media directory contents without "Permission denied" errors
+```
+
+**Next Steps in Phase 5**:
+- Add DFS (Decypharr downloads) mounts at `/mnt/dfs` for integration
+- Add streaming-media mounts at `/mnt/streaming-media` for symlinks
+- Configure download clients in Sonarr/Radarr UIs
+
+---
 
 #### 8. Update Sonarr StatefulSet with Decypharr Integration
 
