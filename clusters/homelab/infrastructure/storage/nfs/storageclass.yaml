@@ -7,6 +7,12 @@ parameters:
   server: 192.168.1.29
   path: /mnt/user
   readOnly: "false"
+mountOptions:
+  - hard                # Retry indefinitely instead of failing (soft mount)
+  - retrans=3           # Number of retransmit timeouts
+  - timeo=20            # Timeout between retransmits in tenths of seconds (2s)
+  - noresvport          # Allow reconnection on new ports after network changes
+  - proto=tcp           # TCP is more reliable than UDP
 allowVolumeExpansion: false
 reclaimPolicy: Retain
 volumeBindingMode: Immediate

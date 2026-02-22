@@ -11,6 +11,12 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   storageClassName: nfs-unraid
+  mountOptions:
+    - hard                # Retry indefinitely instead of failing
+    - retrans=3           # Number of retransmit timeouts
+    - timeo=20            # Timeout between retransmits in tenths of seconds (2s)
+    - noresvport          # Allow reconnection on new ports after network changes
+    - proto=tcp           # TCP is more reliable than UDP
   nfs:
     server: 192.168.1.29
     path: /mnt/user/transcode
