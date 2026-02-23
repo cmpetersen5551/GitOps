@@ -8,7 +8,7 @@ spec:
   capacity:
     storage: 1Ti
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   storageClassName: nfs-unraid
   mountOptions:
@@ -20,4 +20,3 @@ spec:
   nfs:
     server: 192.168.1.29
     path: /mnt/user/media
-    readOnly: true

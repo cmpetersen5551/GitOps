@@ -1,0 +1,22 @@
+---
+# Ingress for Decypharr Download web UI access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: decypharr-download
+  namespace: media
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: decypharr-download.homelab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: decypharr-download
+                port:
+                  number: 8282

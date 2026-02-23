@@ -1,0 +1,18 @@
+---
+# ClusterIP Service for Decypharr Download API
+apiVersion: v1
+kind: Service
+metadata:
+  name: decypharr-download
+  namespace: media
+  labels:
+    app: decypharr-download
+spec:
+  type: ClusterIP
+  selector:
+    app: decypharr-download
+  ports:
+    - name: http
+      port: 8282
+      targetPort: 8282
+      protocol: TCP

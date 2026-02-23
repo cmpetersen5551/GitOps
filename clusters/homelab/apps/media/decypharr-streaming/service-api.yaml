@@ -1,0 +1,18 @@
+---
+# ClusterIP Service for Decypharr Streaming API
+apiVersion: v1
+kind: Service
+metadata:
+  name: decypharr-streaming
+  namespace: media
+  labels:
+    app: decypharr-streaming
+spec:
+  type: ClusterIP
+  selector:
+    app: decypharr-streaming
+  ports:
+    - name: http
+      port: 8282
+      targetPort: 8282
+      protocol: TCP

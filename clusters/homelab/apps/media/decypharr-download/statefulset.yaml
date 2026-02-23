@@ -1,0 +1,112 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: decypharr-download
+  namespace: media
+  labels:
+    app: decypharr-download
+spec:
+  serviceName: decypharr-download-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: decypharr-download
+  # Use OnDelete to prevent automatic restarts during updates
+  updateStrategy:
+    type: OnDelete
+  # Ordered pod management
+  podManagementPolicy: OrderedReady
+  # PVC template for config storage
+  volumeClaimTemplates:
+    - metadata:
+        name: config
+        labels:
+          app: decypharr-download
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-simple
+        resources:
+          requests:
+            storage: 1Gi
+  template:
+    metadata:
+      labels:
+        app: decypharr-download
+        streaming-stack: "true"
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+      # Disable Kubernetes service links to prevent auto-injection of DECYPHARR_PORT env var
+      # The new blackhole:beta image incorrectly parses the tcp://IP:PORT format
+      enableServiceLinks: false
+      # Node affinity: REQUIRE storage nodes, prefer w1 primary
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      # Tolerations for storage nodes with faster failover
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      # Decypharr main container (NFS-only download mode - no FUSE)
+      containers:
+        - name: decypharr
+          image: cy01/blackhole:beta
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8282
+              name: http
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "UTC"
+            # Decypharr specific configs
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media-nfs
+              mountPath: /mnt/media
+      # Volumes
+      volumes:
+        - name: media-nfs
+          persistentVolumeClaim:
+            claimName: pvc-media-nfs

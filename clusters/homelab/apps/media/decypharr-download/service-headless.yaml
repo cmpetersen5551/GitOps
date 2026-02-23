@@ -1,0 +1,19 @@
+---
+# Headless Service for Decypharr Download StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: decypharr-download-headless
+  namespace: media
+  labels:
+    app: decypharr-download
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  selector:
+    app: decypharr-download
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
