@@ -304,8 +304,7 @@ Both use the **identical sidecar pattern**. Template to copy:
       sleep 15
     done
   securityContext:
-    capabilities:
-      add: ["SYS_ADMIN"]
+    privileged: true  # Required for Bidirectional mountPropagation
   resources:
     requests:
       cpu: 10m
