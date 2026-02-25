@@ -286,6 +286,29 @@ Use this checklist when deploying similar apps (Prowlarr, Sonarr variants, etc.)
 
 ---
 
+## Phase 5 Updates: Volume Mounts (2026-02-24)
+
+### Added Complete Mount Configuration
+
+Following Phase 5 integration, Radarr now has the same volume mounts as Sonarr:
+
+| Mount | Source | Type | Purpose |
+|-------|--------|------|----------|
+| `/mnt/media` | pvc-media-nfs | ROX | Unraid media (from decypharr-download) |
+| `/mnt/dfs` | decypharr-streaming-nfs.media.svc | NFS | RealDebrid downloads (via rclone sidecar) |
+| `/mnt/streaming-media` | pvc-streaming-media | RWX | Symlinks and streaming-ready content |
+
+### StatefulSet Changes
+
+Added three new volume mounts to the radarr container:
+- `/mnt/media` - Unraid NFS (read-only)
+- `/mnt/dfs` - Decypharr-Streaming NFS export (RealDebrid cache)
+- `/mnt/streaming-media` - Longhorn RWX for symlinks
+
+For detailed mount configuration, see [DECYPHARR_DEPLOYMENT_NOTES.md#sonarr--radarr-integration](./DECYPHARR_DEPLOYMENT_NOTES.md#sonarr--radarr-integration).
+
+---
+
 ## Next Steps
 
 ### Phase 3: Scale Prowlarr (Next)

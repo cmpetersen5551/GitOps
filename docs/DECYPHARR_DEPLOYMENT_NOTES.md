@@ -1,13 +1,28 @@
 # Decypharr Deployment Notes
 
-**Date**: 2026-02-17  
-**Status**: ✅ DEPLOYED - Running 2/2 containers on k3s-w1
+**Date**: 2026-02-24 (Updated)  
+**Status**: ✅ DEPLOYED - Two separate instances (streaming + download)
 
-## Overview
+## Architecture Overview
 
-Decypharr is deployed as a StatefulSet with two containers:
+**Dual Decypharr Architecture**: Separate StatefulSets for streaming (RealDebrid) and download (Usenet/Torrent):
+
+1. **Decypharr-Streaming**: RealDebrid/Alldebrid provider
+   - Container: decypharr (FUSE client for DFS mount)
+   - Sidecar: rclone-nfs-server (exposes DFS as NFS for Sonarr/Radarr/Plex)
+   - Storage: DFS cache (emptyDir), streaming-media (RWX PVC)
+   - Status: ✅ Running 2/2 on k3s-w1
+
+2. **Decypharr-Download**: Usenet/Torrent provider
+   - Container: decypharr (Usenet/Torrent configuration)
+   - Storage: Unraid media mount (read-only)
+   - Status: ✅ Running 1/1 on k3s-w1
+
+## Streaming Instance Overview (Primary for RealDebrid)
+
+Decypharr-Streaming is deployed as a StatefulSet with two containers:
 1. **decypharr**: Main application (DFS FUSE mount + symlink management)
-2. **rclone-nfs-server**: Sidecar exposing DFS cache as NFS for remote access (ClusterPlex workers)
+2. **rclone-nfs-server**: Sidecar exposing DFS cache as NFS for remote access (Sonarr, Radarr, ClusterPlex workers)
 
 ## Deployment Summary
 
@@ -335,6 +350,52 @@ curl -I http://decypharr.homelab 2>&1 | grep -E "HTTP|401"
 kubectl get endpoints -n media decypharr decypharr-nfs
 # Expected: Both show pod IP on respective ports
 ```
+
+## Sonarr/Radarr Integration
+
+### Mount Configuration
+
+**Sonarr and Radarr require the following mounts** (as of 2026-02-24):
+
+| Mount Path | Source | Provider | Purpose |
+|-----------|--------|----------|---------|
+| `/mnt/media` | `pvc-media-nfs` | decypharr-download | Unraid media (read-only) |
+| `/mnt/dfs` | NFS via decypharr-streaming-nfs.media.svc | decypharr-streaming | RealDebrid downloads |
+| `/mnt/streaming-media` | `pvc-streaming-media` | Longhorn RWX | Symlinks and streamed content |
+
+**Volume Definition** (for Sonarr/Radarr StatefulSet):
+```yaml
+volumes:
+  - name: media-nfs
+    persistentVolumeClaim:
+      claimName: pvc-media-nfs
+  - name: streaming-media
+    persistentVolumeClaim:
+      claimName: pvc-streaming-media
+  - name: dfs-nfs  # RealDebrid downloads via decypharr-streaming NFS
+    nfs:
+      server: decypharr-streaming-nfs.media.svc.cluster.local
+      path: /
+      readOnly: false
+
+# Container volumeMounts:
+volumeMounts:
+  - name: config
+    mountPath: /config
+  - name: media-nfs
+    mountPath: /mnt/media
+  - name: dfs-nfs
+    mountPath: /mnt/dfs
+  - name: streaming-media
+    mountPath: /mnt/streaming-media
+```
+
+### Data Flow
+
+1. **Download Instance** → `/mnt/media` (Usenet/Torrent → Unraid)
+2. **Streaming Instance** → `/mnt/dfs` (RealDebrid/Alldebrid cache)
+3. **Sonarr/Radarr** → Can see both paths, choose download locations per show/movie
+4. **Symlinks** → Created in `/mnt/streaming-media`, links point to either Unraid or RealDebrid
 
 ## Troubleshooting
 

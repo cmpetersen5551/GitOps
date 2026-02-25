@@ -1,10 +1,10 @@
 # Media Automation Stack Implementation Plan
 
-**TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr DFS for streamed downloads via RealDebrid/UsenetExpress, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. All credentials are configured via application UIs.
+**TL;DR**: Deploy a cloud-based media automation stack (Sonarr, Radarr, Prowlarr, Profilarr, Decypharr-Streaming, Decypharr-Download, Plex with ClusterPlex, Pulsarr) on your existing k3s homelab with Longhorn 2-node HA. Apps use Longhorn for config storage, Decypharr-Streaming DFS for streamed downloads via RealDebrid/Alldebrid, Decypharr-Download for Usenet, Profilarr for manual quality profile management, and ClusterPlex for distributed GPU transcoding. All credentials are configured via application UIs.
 
-**Current Status**: Phase 5 In Progress (Media library mounting complete, DFS integration pending)  
-**Last Updated**: 2026-02-17  
-**Estimated Remaining Time**: 6-10 hours (Phases 5-8)
+**Current Status**: Phase 5 Complete (Sonarr/Radarr integration with dual Decypharr instances)  
+**Last Updated**: 2026-02-24  
+**Remaining**: Phase 6-8 (Quality profiles, Plex, Pulsarr)
 
 ---
 
@@ -28,26 +28,33 @@
 - Profilarr deployed (quality profile management)
 - Manual indexer configuration pending (requires user API keys)
 
-### ✅ Phase 4: Download Client (Decypharr)
-- **Status**: FULLY COMPLETED (2026-02-18)
-- ✅ Decypharr deployed with DFS + NFS export
+### ✅ Phase 4: Download Client (Dual Decypharr Architecture)
+- **Status**: FULLY COMPLETED (2026-02-24)
+- ✅ Decypharr-Streaming: RealDebrid/Alldebrid downloads + DFS + NFS export via rclone sidecar
+  - DFS FUSE mount at `/mnt/dfs`
+  - Streaming-media PVC at `/mnt/streaming-media` (symlinks)
+  - Web UI accessible at http://decypharr-streaming.homelab
+- ✅ Decypharr-Download: Usenet/Torrent downloads + Unraid media mount
+  - Unraid media mount at `/mnt/media` (read-only)
+  - Web UI accessible at http://decypharr-download.homelab
 - ✅ Critical infrastructure fix: nfs-common installed on storage nodes
-- ✅ Streaming-media RWX volume operational (1Gi) on storage node (k3s-w2)
-- ✅ Web UI accessible at http://decypharr.homelab
+- ✅ Streaming-media RWX volume operational (1Gi) on storage node
 - ✅ **CRITICAL FIX APPLIED**: Longhorn share-manager pods now scheduled to storage nodes only
   - Added `systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"` to HelmRelease
   - RWX volumes now attach to correct storage node (w2), not control plane (cp1)
   - See LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md for detailed learning
 
-### ⏳ Phase 5: Sonarr/Radarr ↔ Decypharr Integration
-- **Status**: IN PROGRESS (2026-02-17)
+### ✅ Phase 5: Sonarr/Radarr ↔ Decypharr Integration
+- **Status**: COMPLETED (2026-02-24)
 - ✅ **COMPLETED**: Media library mounting from Unraid NFS share
   - Created `nfs-unraid` StorageClass
-  - Added `/mnt/media` mounts to Sonarr, Radarr, Decypharr containers
+  - Added `/mnt/media` mounts to Sonarr, Radarr containers (from decypharr-download)
   - All pods have read-only access to Unraid media (downloads, movies, tvshows, etc.)
   - Server: `192.168.1.29`, Path: `/mnt/user/media`
-- ⏳ **PENDING**: Init containers for mount ordering (DFS integration)
-- ⏳ **PENDING**: Volume mounts for `/mnt/dfs` and `/mnt/streaming-media` (download client integration)
+- ✅ **COMPLETED**: DFS and streaming-media mounts to Sonarr/Radarr
+  - Added `/mnt/dfs` NFS mount (connects to decypharr-streaming rclone-nfs-server sidecar)
+  - Added `/mnt/streaming-media` PVC mount (shared Longhorn volume for symlinks)
+  - Sonarr/Radarr can now access RealDebrid downloads and organize symlinks
 - ⏳ **PENDING**: Download client configuration in Sonarr/Radarr UIs
 
 ### ⏳ Phase 6: Quality Profile Management

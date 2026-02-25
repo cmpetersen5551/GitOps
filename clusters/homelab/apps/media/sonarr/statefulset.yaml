@@ -59,11 +59,19 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 30
-      # Volumes: NFS shares from Unraid
+      # Volumes: NFS shares from Unraid and streaming media
       volumes:
         - name: media-nfs
           persistentVolumeClaim:
             claimName: pvc-media-nfs
+        - name: streaming-media
+          persistentVolumeClaim:
+            claimName: pvc-streaming-media
+        - name: dfs-nfs  # DFS via decypharr-streaming NFS export
+          nfs:
+            server: decypharr-streaming-nfs.media.svc.cluster.local
+            path: /
+            readOnly: false
       containers:
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
@@ -114,6 +122,10 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library (read-only)
               mountPath: /mnt/media
+            - name: dfs-nfs  # RealDebrid downloads via decypharr-streaming
+              mountPath: /mnt/dfs
+            - name: streaming-media  # Symlinks and streamed content
+              mountPath: /mnt/streaming-media
   # PVC template - creates PVC automatically per pod
   volumeClaimTemplates:
     - metadata:

@@ -1,8 +1,8 @@
 # Media Stack Deployment: Phases 2-4 Completion Summary
 
-**Date**: 2026-02-17  
-**Duration**: ~6 hours (including troubleshooting and documentation)  
-**Status**: ✅ Core infrastructure and download client operational
+**Date**: 2026-02-24 (Updated)  
+**Duration**: Phase 2-4: ~6 hours | Phase 5: ~2 hours (Sonarr/Radarr integration)  
+**Status**: ✅ Core infrastructure, dual Decypharr instances, and app integrations operational
 
 ---
 
@@ -16,12 +16,13 @@
 | Radarr | ✅ Running | k3s-w1 | 1/1 | Movie automation |
 | Prowlarr | ✅ Running | k3s-w1 | 1/1 | Indexer management |
 | Profilarr | ✅ Running | k3s-w1 | 1/1 | Quality profile sync |
-| Decypharr | ✅ Running | k3s-w1 | 2/2 | RealDebrid DFS + symlinks |
+| Decypharr-Streaming | ✅ Running | k3s-w1 | 2/2 | RealDebrid DFS + NFS sidecar |
+| Decypharr-Download | ✅ Running | k3s-w1 | 1/1 | Usenet/Torrent downloads |
 
 **Total Resources Allocated:**
-- CPU Requests: ~650m
-- Memory Requests: ~1.5Gi
-- Storage: 25Gi (config PVCs) + 1Gi (streaming-media RWX)
+- CPU Requests: ~1050m
+- Memory Requests: ~2.5Gi
+- Storage: 26Gi (config PVCs) + 1Gi (streaming-media RWX)
 
 ### Storage Infrastructure
 
@@ -49,7 +50,29 @@ pvc-transcode-nfs     200Gi  RWX   nfs-unraid
 - http://decypharr.homelab → Decypharr UI (port 8282)
 
 **Internal Services:**
-- `decypharr-nfs.media.svc.cluster.local:2049` - NFS export for ClusterPlex workers
+- `decypharr-streaming-nfs.media.svc.cluster.local:2049` - NFS export (DFS) for Sonarr, Radarr, ClusterPlex workers
+- `decypharr-download-nfs.media.svc.cluster.local` - Headless service for download instance
+
+---
+
+## Phase 5 Updates (Sonarr/Radarr Integration - 2026-02-24)
+
+### Volume Mounts Added to Sonarr/Radarr
+
+**Sonarr and Radarr now have the complete mount configuration**:
+
+| Mount | Source | Type | Purpose |
+|-------|--------|------|----------|
+| `/mnt/media` | pvc-media-nfs | ROX | Unraid media (from decypharr-download) |
+| `/mnt/dfs` | decypharr-streaming-nfs.media.svc | NFS | RealDebrid downloads (via rclone sidecar) |
+| `/mnt/streaming-media` | pvc-streaming-media | RWX | Symlinks and streaming-ready content |
+
+**Data Flow**:
+1. Sonarr/Radarr monitor Prowlarr for new releases
+2. Route to appropriate download client (streaming → Decypharr-Streaming, usenet → Decypharr-Download)
+3. Downloads appear in `/mnt/dfs` or `/mnt/media` respectively
+4. Sonarr/Radarr move files and create symlinks in `/mnt/streaming-media`
+5. Plex reads from `/mnt/streaming-media` + `/mnt/media`
 
 ---
 
