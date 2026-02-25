@@ -240,7 +240,7 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 No changes to consumer pods — the `decypharr-streaming-nfs` ClusterIP service still answers on port 2049. Consumer pod dfs-mounter sidecars continue using:
 
 ```yaml
-mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
+mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=30,retrans=3 \
   decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
 
 containers:
@@ -253,7 +253,7 @@ containers:
       mkdir -p /mnt/dfs
       while true; do
         if ! mountpoint -q /mnt/dfs; then
-          mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
+          mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=30,retrans=3 \
             decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
             && echo "DFS mounted" || echo "DFS mount failed, retrying..."
         fi
@@ -320,7 +320,7 @@ Both use the **identical consumer sidecar pattern**. Template to copy:
     mkdir -p /mnt/dfs
     while true; do
       if ! mountpoint -q /mnt/dfs; then
-        mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
+        mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=30,retrans=3 \
           decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
           && echo "DFS mounted" || echo "DFS mount failed, retrying..."
       fi
