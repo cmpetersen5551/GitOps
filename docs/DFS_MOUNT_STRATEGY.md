@@ -121,7 +121,7 @@ Add a small sidecar to each consumer pod that performs the NFS mount **from with
 Consumer pod (Sonarr/Radarr/Plex/Worker):
   ┌─────────────────────────────────────────┐
   │  dfs-mounter sidecar                    │
-  │  - Runs: mount -t nfs4 <service-dns>:/ /mnt/dfs │
+  │  - Runs: mount -t nfs -o vers=3 <service-dns>:/ /mnt/dfs │
   │  - Uses CoreDNS ✅ (pod network ns)     │
   │  - Retries every 15s if mount lost      │
   │  - mountPropagation: Bidirectional      │
@@ -195,7 +195,7 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 │  ┌─────────────────────────────────────────────────┐       │
 │  │  [dfs-mounter sidecar]                          │       │
 │  │   Uses CoreDNS → resolves service               │       │
-│  │   mount -t nfs4 <service>:/ /mnt/dfs           │       │
+│  │   mount -t nfs -o vers=3 <service>:/ /mnt/dfs           │       │
 │  │   Retries every 15s if mount lost               │       │
 │  │   mountPropagation: Bidirectional               │       │
 │  │             │                                   │       │
@@ -240,7 +240,7 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 No changes to consumer pods — the `decypharr-streaming-nfs` ClusterIP service still answers on port 2049. Consumer pod dfs-mounter sidecars continue using:
 
 ```yaml
-mount -t nfs4 -o soft,timeo=30,retrans=3 \
+mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
   decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
 
 containers:
@@ -253,7 +253,7 @@ containers:
       mkdir -p /mnt/dfs
       while true; do
         if ! mountpoint -q /mnt/dfs; then
-          mount -t nfs4 -o soft,timeo=30,retrans=3 \
+          mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
             decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
             && echo "DFS mounted" || echo "DFS mount failed, retrying..."
         fi
@@ -320,7 +320,7 @@ Both use the **identical consumer sidecar pattern**. Template to copy:
     mkdir -p /mnt/dfs
     while true; do
       if ! mountpoint -q /mnt/dfs; then
-        mount -t nfs4 -o soft,timeo=30,retrans=3 \
+        mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
           decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
           && echo "DFS mounted" || echo "DFS mount failed, retrying..."
       fi
