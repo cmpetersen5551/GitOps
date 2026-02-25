@@ -55,6 +55,9 @@ spec:
       # Issue: https://github.com/longhorn/longhorn/issues/xxx
       systemManagedComponentsNodeSelector: "node.longhorn.io/storage:enabled"
       
+      # NFS client mount options for RWX volumes - use hard mount for reliable writes
+      nfsMountOptions: "vers=4.1,hard,timeo=600,retrans=5"
+      
       # Node and disk settings
       createDefaultDiskLabeledNodes: true
       defaultDataPath: /var/lib/longhorn
