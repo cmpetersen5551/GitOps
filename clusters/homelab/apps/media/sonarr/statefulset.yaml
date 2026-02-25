@@ -70,7 +70,7 @@ spec:
         - name: dfs-nfs  # DFS via decypharr-streaming NFS export
           nfs:
             server: decypharr-streaming-nfs.media.svc.cluster.local
-            path: /
+            path: /mnt/dfs
             readOnly: false
       containers:
         - name: sonarr
