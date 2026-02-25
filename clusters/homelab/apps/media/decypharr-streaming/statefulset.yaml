@@ -80,6 +80,7 @@ spec:
         - name: decypharr
           image: cy01/blackhole:beta
           imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/decypharr", "--config", "/config"]
           securityContext:
             privileged: true  # Required for FUSE mount
             capabilities:
