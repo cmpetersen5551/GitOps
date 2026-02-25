@@ -68,8 +68,7 @@ spec:
           persistentVolumeClaim:
             claimName: pvc-streaming-media
         - name: dfs-shared  # In-pod sidecar mounts NFS here; shared with radarr container
-          emptyDir:
-            medium: Memory  # Required for reliable mount propagation (Kubernetes docs recommendation; see issue #95049)
+          emptyDir: {}  # Plain dir — dfs-mounter mounts NFS here; medium:Memory was a mountpoint itself, blocking the NFS check
       containers:
         # Sidecar: mounts DFS from decypharr-streaming inside pod network namespace
         # Uses CoreDNS (not kubelet host DNS), auto-reconnects if NFS blips.
@@ -83,7 +82,7 @@ spec:
               apk add --no-cache nfs-utils --quiet
               mkdir -p /mnt/dfs
               while true; do
-                if ! mountpoint -q /mnt/dfs; then
+                if ! grep -qs 'decypharr-streaming-nfs' /proc/mounts; then
                   mount -t nfs4 -o soft,timeo=30,retrans=3 \
                     decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
                     && echo "DFS mounted" || echo "DFS mount failed, retrying..."
