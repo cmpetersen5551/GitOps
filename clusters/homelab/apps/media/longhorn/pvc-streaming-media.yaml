@@ -18,4 +18,4 @@ spec:
   storageClassName: longhorn-rwx
   resources:
     requests:
-      storage: 1Gi  # Longhorn RWX volume - symlinks only, minimal space needed
+      storage: 10Gi  # Quota for Sonarr disk space checks - actual usage minimal (DFS-backed via Debrid symlinks)
