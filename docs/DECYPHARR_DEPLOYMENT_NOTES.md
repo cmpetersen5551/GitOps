@@ -32,7 +32,7 @@ Decypharr-Streaming is deployed as a StatefulSet with two containers:
 - **Storage**:
   - Config: `config-decypharr-0` (10Gi Longhorn RWO)
   - Streaming Media: `pvc-streaming-media` (1Gi Longhorn RWX - for symlinks)
-  - DFS Cache: EmptyDir (500Gi ephemeral storage)
+  - DFS Cache: `emptyDir: {medium: Memory}` (tmpfs, ephemeral — required for FUSE mount propagation)
 - **Node Affinity**: Requires storage nodes (w1/w2), prefers w1
 - **Tolerations**: `node.longhorn.io/storage=enabled:NoSchedule`
 
@@ -295,7 +295,7 @@ spec:
 
 ### decypharr container
 - `/config` → `config-decypharr-0` PVC (persistent config/database)
-- `/mnt/dfs` → EmptyDir (DFS FUSE mount - ephemeral cache)
+- `/mnt/dfs` → `emptyDir: {medium: Memory}` (tmpfs for FUSE mount propagation — memory-backed required per Kubernetes docs)
 - `/mnt/streaming-media` → `pvc-streaming-media` (Longhorn RWX - symlink library)
 
 ### rclone-nfs-server container

@@ -1,7 +1,7 @@
 # DFS Mount Strategy: In-Pod Sidecar Decision
 
-**Date**: 2026-02-24  
-**Status**: ✅ Implemented  
+**Date**: 2026-02-24 (Updated 2026-02-25)  
+**Status**: ✅ Implemented (memory-backed emptyDir fix applied)  
 **Context**: How Sonarr, Radarr, Plex, and ClusterPlex workers access `/mnt/dfs` from the decypharr-streaming FUSE mount  
 
 ---
@@ -27,24 +27,52 @@ Decypharr-streaming creates a FUSE mount at `/mnt/dfs` (RealDebrid DFS cache). C
 
 ## Root Cause: Why Sonarr/Radarr Were Stuck in `ContainerCreating`
 
-Three compounding bugs in the previous implementation:
+Three compounding bugs found and resolved across two debugging sessions:
 
-### Bug 1: emptyDir instead of hostPath in decypharr-streaming
+### Bug 1: emptyDir instead of hostPath in decypharr-streaming (Initial Fix)
 
 ```yaml
-# WRONG - emptyDir is isolated per pod, FUSE mount cannot propagate
+# WRONG - plain emptyDir is isolated per pod, FUSE mount cannot propagate
 volumes:
   - name: dfs
     emptyDir:
       sizeLimit: 1Gi
 ```
 
-The decypharr process creates a FUSE mount at `/mnt/dfs` inside its container. For this to be visible to the rclone-nfs-server sidecar (and eventually to other pods), it must propagate **through the host kernel**. This requires:
-1. A `hostPath` volume (so the mount point exists on the actual node)
-2. `mountPropagation: Bidirectional` on the decypharr container (so FUSE propagates to host)
-3. `mountPropagation: HostToContainer` on the rclone sidecar (so rclone sees the propagated FUSE)
+The decypharr process creates a FUSE mount at `/mnt/dfs` inside its container. For this to be visible to the rclone-nfs-server sidecar (and eventually to other pods), it must propagate **through the host kernel**. This requires a volume type that the container runtime mounts with correct shared propagation semantics.
 
-Without this, rclone was serving an **empty directory** over NFS. Sonarr/Radarr were mounting nothing even when they could connect.
+Changing to `hostPath` was the first fix attempted, but it was only partially correct — see Bug 1b below.
+
+### Bug 1b: hostPath FUSE propagation unreliable in k3s (Root Cause — Fixed 2026-02-25)
+
+```yaml
+# STILL WRONG - hostPath from a plain directory is unreliable for FUSE propagation
+volumes:
+  - name: dfs
+    hostPath:
+      path: /mnt/k8s/decypharr-streaming-dfs
+      type: DirectoryOrCreate
+```
+
+This was the intermediate fix that still failed. FUSE mounts propagating via `hostPath` require the host path's parent mount to be in a **shared peer group** (`MS_SHARED`). On k3s, `/mnt/k8s/` sits on the root filesystem which is typically `rprivate` (private propagation). Even though the container's bind-mount is set to `rshared` for Bidirectional, the FUSE mount could not propagate further than the kubelet's pod volume directory — it never appeared on the host path, so the rclone-nfs-server sidecar saw an empty directory.
+
+This is confirmed behavior by Kubernetes maintainer jsafrane in [kubernetes/kubernetes#95049](https://github.com/kubernetes/kubernetes/issues/95049):
+
+> *"Mount propagation really works only for hostpath volumes, where there are no global/local bind-mounts and a container gets directly the host directory as a docker volume."*
+
+And the official Kubernetes documentation explicitly cautions:
+
+> *"Mount propagation is a low-level feature that does not work consistently on all volume types. The Kubernetes project recommends only using mount propagation with `hostPath` or **memory-backed `emptyDir`** volumes."*
+
+**The correct fix**: use `emptyDir: {medium: Memory}` (tmpfs). kubelet creates a fresh tmpfs mount point — not a bind-mount from a directory — which the container runtime correctly marks as `rshared`. FUSE mounts created inside the container propagate cleanly through this tmpfs to the rclone sidecar via `HostToContainer`.
+
+```yaml
+# CORRECT - memory-backed emptyDir creates a proper shared tmpfs mount point
+volumes:
+  - name: dfs
+    emptyDir:
+      medium: Memory  # Creates tmpfs with correct propagation semantics
+```
 
 ### Bug 2: Wrong NFS export path
 
@@ -120,9 +148,10 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 ┌──────────────────────────────────────────────────────────────┐
 │ Node: k3s-w1 (or k3s-w2 after failover)                     │
 │                                                              │
-│  hostPath: /mnt/k8s/decypharr-streaming-dfs                 │
+│  kubelet creates tmpfs (emptyDir medium: Memory)            │
+│  /var/lib/kubelet/pods/<id>/volumes/.../dfs                  │
 │  (FUSE mount propagates here from decypharr container)       │
-│         ▲ Bidirectional                                      │
+│         ▲ Bidirectional (rshared)                           │
 │         │                                                    │
 │  ┌─────────────────────────────────────┐                    │
 │  │ decypharr-streaming-0 pod           │                    │
@@ -131,9 +160,9 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 │  │   privileged, FUSE creates:         │                    │
 │  │   /mnt/dfs → FUSE (RealDebrid DFS)  │                    │
 │  │   Bidirectional → propagates FUSE   │                    │
-│  │   to host hostPath                  │                    │
+│  │   to tmpfs in host mount ns         │                    │
 │  │            │                        │                    │
-│  │            ▼ (shared hostPath vol)  │                    │
+│  │            ▼ (shared tmpfs vol)     │                    │
 │  │  [rclone-nfs-server sidecar]        │                    │
 │  │   HostToContainer → sees FUSE       │                    │
 │  │   serves /mnt/dfs as NFSv4 on :2049 │                   │
@@ -179,13 +208,13 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 
 ### decypharr-streaming changes
 
-**Volume**: `emptyDir` → `hostPath` so FUSE can propagate to host kernel:
+**Volume**: `emptyDir: {}` → `emptyDir: {medium: Memory}` so FUSE can propagate through the host kernel. Memory-backed emptyDir creates a fresh tmpfs mount point that kubelet marks as `rshared`, giving correct Bidirectional propagation semantics. (Plain emptyDir and hostPath both failed — see Bug 1b above.)
+
 ```yaml
 volumes:
   - name: dfs
-    hostPath:
-      path: /mnt/k8s/decypharr-streaming-dfs
-      type: DirectoryOrCreate
+    emptyDir:
+      medium: Memory  # Creates tmpfs with correct shared propagation semantics
 ```
 
 **decypharr container mount**: Add `Bidirectional` propagation (FUSE → host):
@@ -217,7 +246,8 @@ volumes:
 ```yaml
 volumes:
   - name: dfs-shared
-    emptyDir: {}
+    emptyDir:
+      medium: Memory  # Required for reliable NFS mount propagation (Kubernetes recommendation)
 
 containers:
   - name: dfs-mounter

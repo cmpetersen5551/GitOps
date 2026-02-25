@@ -41,7 +41,23 @@
 
 ---
 
-## Recent Changes (This Session - 2026-02-17)
+## Recent Changes (2026-02-25)
+
+### FUSE Mount Propagation Fix ✅
+Root cause identified and resolved: FUSE mounts inside the decypharr container were not propagating to the rclone-nfs-server sidecar, causing it to serve an empty NFS export to Sonarr/Radarr.
+
+**Root Cause**: Kubernetes mount propagation (`Bidirectional`/`HostToContainer`) only works reliably with `hostPath` volumes whose parent is in a shared peer group, or with **memory-backed `emptyDir`** (tmpfs). The `hostPath` at `/mnt/k8s/decypharr-streaming-dfs` sat on the root filesystem marked `rprivate` on k3s, so FUSE propagation was silently blocked. Confirmed by [kubernetes/kubernetes#95049](https://github.com/kubernetes/kubernetes/issues/95049) and official Kubernetes docs.
+
+**Fix**: Changed all DFS-related volumes to `emptyDir: {medium: Memory}` (tmpfs), which kubelet mounts with correct `rshared` semantics:
+- `decypharr-streaming`: `dfs` volume: `hostPath` → `emptyDir: {medium: Memory}`
+- `sonarr`: `dfs-shared` volume: `emptyDir: {}` → `emptyDir: {medium: Memory}`
+- `radarr`: `dfs-shared` volume: `emptyDir: {}` → `emptyDir: {medium: Memory}`
+
+**Docs updated**: `DFS_MOUNT_STRATEGY.md`, `DECYPHARR_DEPLOYMENT_NOTES.md`, `CLUSTER_STATE_SUMMARY.md`
+
+---
+
+## Previous Changes (Session - 2026-02-17)
 
 ### Phase 2: Radarr Deployment Complete ✅
 - ✅ Radarr StatefulSet deployed (mirrors Sonarr architecture)

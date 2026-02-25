@@ -68,7 +68,8 @@ spec:
           persistentVolumeClaim:
             claimName: pvc-streaming-media
         - name: dfs-shared  # In-pod sidecar mounts NFS here; shared with sonarr container
-          emptyDir: {}
+          emptyDir:
+            medium: Memory  # Required for reliable mount propagation (Kubernetes docs recommendation; see issue #95049)
       containers:
         # Sidecar: mounts DFS from decypharr-streaming inside pod network namespace
         # Uses CoreDNS (not kubelet host DNS), auto-reconnects if NFS blips.

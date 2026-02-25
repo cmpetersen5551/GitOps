@@ -142,9 +142,8 @@ spec:
       # Volumes
       volumes:
         - name: dfs
-          hostPath:
-            path: /mnt/k8s/decypharr-streaming-dfs  # Shared with host kernel for FUSE propagation
-            type: DirectoryOrCreate
+          emptyDir:
+            medium: Memory  # Required for reliable FUSE mount propagation (Kubernetes docs recommendation; see issue #95049)
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
