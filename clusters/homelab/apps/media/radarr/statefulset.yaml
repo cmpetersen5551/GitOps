@@ -69,7 +69,7 @@ spec:
             claimName: pvc-streaming-media
         - name: dfs-nfs  # DFS via decypharr-streaming NFS export
           nfs:
-            server: decypharr-streaming-nfs.media.svc.cluster.local
+            server: 10.43.200.129
             path: /mnt/dfs
             readOnly: false
       containers:
