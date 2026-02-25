@@ -110,6 +110,7 @@ spec:
               mountPath: /config
             - name: dfs
               mountPath: /mnt/dfs
+              mountPropagation: Bidirectional  # CRITICAL: propagates FUSE mount to host kernel
             - name: streaming-media
               mountPath: /mnt/streaming-media
         # rclone NFS server sidecar - exposes DFS as NFS for remote access
@@ -136,12 +137,13 @@ spec:
           volumeMounts:
             - name: dfs
               mountPath: /mnt/dfs
-              readOnly: true
+              mountPropagation: HostToContainer  # Receives propagated FUSE mount from decypharr container
       # Volumes
       volumes:
         - name: dfs
-          emptyDir:
-            sizeLimit: 1Gi  # Mount point only — DFS cache configured to /tmp/dfs-cache
+          hostPath:
+            path: /mnt/k8s/decypharr-streaming-dfs  # Shared with host kernel for FUSE propagation
+            type: DirectoryOrCreate
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media

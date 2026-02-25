@@ -67,12 +67,42 @@ spec:
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
-        - name: dfs-nfs  # DFS via decypharr-streaming NFS export
-          nfs:
-            server: 10.43.200.129
-            path: /mnt/dfs
-            readOnly: false
+        - name: dfs-shared  # In-pod sidecar mounts NFS here; shared with sonarr container
+          emptyDir: {}
       containers:
+        # Sidecar: mounts DFS from decypharr-streaming inside pod network namespace
+        # Uses CoreDNS (not kubelet host DNS), auto-reconnects if NFS blips.
+        # See docs/DFS_MOUNT_STRATEGY.md for full architecture rationale.
+        - name: dfs-mounter
+          image: alpine:3.19
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              apk add --no-cache nfs-utils --quiet
+              mkdir -p /mnt/dfs
+              while true; do
+                if ! mountpoint -q /mnt/dfs; then
+                  mount -t nfs4 -o soft,timeo=30,retrans=3 \
+                    decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
+                    && echo "DFS mounted" || echo "DFS mount failed, retrying..."
+                fi
+                sleep 15
+              done
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: dfs-shared
+              mountPath: /mnt/dfs
+              mountPropagation: Bidirectional
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
           imagePullPolicy: IfNotPresent
@@ -122,8 +152,9 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library (read-only)
               mountPath: /mnt/media
-            - name: dfs-nfs  # RealDebrid downloads via decypharr-streaming
+            - name: dfs-shared  # Provided by dfs-mounter sidecar
               mountPath: /mnt/dfs
+              mountPropagation: HostToContainer
             - name: streaming-media  # Symlinks and streamed content
               mountPath: /mnt/streaming-media
   # PVC template - creates PVC automatically per pod
