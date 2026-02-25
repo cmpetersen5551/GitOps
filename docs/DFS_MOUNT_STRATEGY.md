@@ -1,7 +1,7 @@
 # DFS Mount Strategy: In-Pod Sidecar Decision
 
 **Date**: 2026-02-24 (Updated 2026-02-25)  
-**Status**: ✅ Implemented (memory-backed emptyDir fix applied)  
+**Status**: ✅ Implemented — rclone colocated in decypharr container (no propagation needed)  
 **Context**: How Sonarr, Radarr, Plex, and ClusterPlex workers access `/mnt/dfs` from the decypharr-streaming FUSE mount  
 
 ---
@@ -64,14 +64,35 @@ And the official Kubernetes documentation explicitly cautions:
 
 > *"Mount propagation is a low-level feature that does not work consistently on all volume types. The Kubernetes project recommends only using mount propagation with `hostPath` or **memory-backed `emptyDir`** volumes."*
 
-**The correct fix**: use `emptyDir: {medium: Memory}` (tmpfs). kubelet creates a fresh tmpfs mount point — not a bind-mount from a directory — which the container runtime correctly marks as `rshared`. FUSE mounts created inside the container propagate cleanly through this tmpfs to the rclone sidecar via `HostToContainer`.
+**The correct fix**: use `emptyDir: {medium: Memory}` (tmpfs). kubelet creates a fresh tmpfs mount point that the container runtime correctly marks as `rshared`. We tested this — it still did not work.
+
+**Root cause of failure with memory-backed emptyDir**: Even though the Kubernetes docs recommend this approach, kubelet creates a separate bind-mount of the same tmpfs for each container in the pod. Each bind-mount lands in a different mount peer group. Inspecting `/proc/X/mountinfo` inside the containers confirmed that the FUSE mount peer group (ID 549 in decypharr) and the rclone sidecar's peer group (ID 303) are disconnected. The FUSE mount propagates from decypharr into kubelet's intermediate path, but not into the rclone sidecar's mount namespace.
+
+**This is a fundamental limitation of Kubernetes**: mount propagation between containers in the same pod is broken regardless of volume type, because each container's volume mount is a separate bind-mount with its own peer group. There is no supported way to share a live FUSE mount between two containers in the same pod via volume mounts alone.
+
+### Bug 1c: Final fix — run rclone in the same container as decypharr (2026-02-25)
+
+Since `rclone` is already present in the `cy01/blackhole:beta` image at `/usr/local/bin/rclone`, the solution is to **eliminate the sidecar entirely** and run rclone inside the decypharr container. Both processes share the same mount namespace — no propagation is needed at all.
 
 ```yaml
-# CORRECT - memory-backed emptyDir creates a proper shared tmpfs mount point
-volumes:
-  - name: dfs
-    emptyDir:
-      medium: Memory  # Creates tmpfs with correct propagation semantics
+# CORRECT - both processes in the same mount namespace
+containers:
+  - name: decypharr
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        mkdir -p /mnt/dfs
+        /usr/bin/decypharr --config /config &
+        DECYPHARR_PID=$!
+        # Wait for FUSE mount to appear
+        until grep -q ' /mnt/dfs ' /proc/mounts 2>/dev/null; do
+          sleep 2
+        done
+        # rclone serves /mnt/dfs directly (same mount namespace)
+        while kill -0 $DECYPHARR_PID 2>/dev/null; do
+          rclone serve nfs /mnt/dfs --addr=0.0.0.0:2049 || true
+          sleep 5
+        done
 ```
 
 ### Bug 2: Wrong NFS export path
@@ -148,24 +169,19 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 ┌──────────────────────────────────────────────────────────────┐
 │ Node: k3s-w1 (or k3s-w2 after failover)                     │
 │                                                              │
-│  kubelet creates tmpfs (emptyDir medium: Memory)            │
-│  /var/lib/kubelet/pods/<id>/volumes/.../dfs                  │
-│  (FUSE mount propagates here from decypharr container)       │
-│         ▲ Bidirectional (rshared)                           │
-│         │                                                    │
 │  ┌─────────────────────────────────────┐                    │
 │  │ decypharr-streaming-0 pod           │                    │
 │  │                                     │                    │
-│  │  [decypharr container]              │                    │
-│  │   privileged, FUSE creates:         │                    │
-│  │   /mnt/dfs → FUSE (RealDebrid DFS)  │                    │
-│  │   Bidirectional → propagates FUSE   │                    │
-│  │   to tmpfs in host mount ns         │                    │
-│  │            │                        │                    │
-│  │            ▼ (shared tmpfs vol)     │                    │
-│  │  [rclone-nfs-server sidecar]        │                    │
-│  │   HostToContainer → sees FUSE       │                    │
-│  │   serves /mnt/dfs as NFSv4 on :2049 │                   │
+│  │  [decypharr container] (privileged) │                    │
+│  │   SAME mount namespace as rclone    │                    │
+│  │                                     │                    │
+│  │   /usr/bin/decypharr --config /config  (background)     │
+│  │       ↓ creates FUSE mount                              │
+│  │   /mnt/dfs → RealDebrid DFS FUSE                        │
+│  │       ↓ same process namespace                          │
+│  │   rclone serve nfs /mnt/dfs --addr=0.0.0.0:2049        │
+│  │       ↓ serves DFS content directly as NFSv4            │
+│  │   port 2049 (no volume/propagation needed)              │
 │  └─────────────────────────────────────┘                    │
 │         │                                                    │
 │         ▼ ClusterIP service (CoreDNS resolvable)            │
@@ -208,46 +224,24 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 
 ### decypharr-streaming changes
 
-**Volume**: `emptyDir: {}` → `emptyDir: {medium: Memory}` so FUSE can propagate through the host kernel. Memory-backed emptyDir creates a fresh tmpfs mount point that kubelet marks as `rshared`, giving correct Bidirectional propagation semantics. (Plain emptyDir and hostPath both failed — see Bug 1b above.)
+**Eliminated the rclone-nfs-server sidecar container entirely.** The `cy01/blackhole:beta` image already ships rclone at `/usr/local/bin/rclone`. Running it in the same container as decypharr means both processes share a mount namespace — rclone sees `/mnt/dfs` directly without any volume mount propagation.
 
-```yaml
-volumes:
-  - name: dfs
-    emptyDir:
-      medium: Memory  # Creates tmpfs with correct shared propagation semantics
-```
+**Removed the `dfs` emptyDir volume** — no longer needed since FUSE and NFS server are in the same container.
 
-**decypharr container mount**: Add `Bidirectional` propagation (FUSE → host):
-```yaml
-- name: dfs
-  mountPath: /mnt/dfs
-  mountPropagation: Bidirectional
-```
-
-**rclone-nfs-server mount**: Add `HostToContainer` propagation (host FUSE → rclone):
-```yaml
-- name: dfs
-  mountPath: /mnt/dfs
-  mountPropagation: HostToContainer
-```
+**Startup sequence:**
+1. `mkdir -p /mnt/dfs` — ensure mount point directory exists
+2. `decypharr --config /config &` — start decypharr in background (creates FUSE at `/mnt/dfs`)
+3. Wait until `/proc/mounts` shows `/mnt/dfs` — FUSE is ready
+4. `rclone serve nfs /mnt/dfs --addr=0.0.0.0:2049` — serve DFS as NFSv4
+5. Restart loop: if rclone crashes, restart it while decypharr is still running
 
 ### Consumer pod changes (Sonarr, Radarr — and Plex/worker when deployed)
 
-**Remove** the broken kubelet-level NFS volume:
-```yaml
-# REMOVE this:
-- name: dfs-nfs
-  nfs:
-    server: 10.43.200.129  # ClusterIP: unresolvable from kubelet
-    path: /mnt/dfs          # Wrong path: should be /
-```
+No changes to consumer pods — the `decypharr-streaming-nfs` ClusterIP service still answers on port 2049. Consumer pod dfs-mounter sidecars continue using:
 
-**Add** the in-pod sidecar pattern:
 ```yaml
-volumes:
-  - name: dfs-shared
-    emptyDir:
-      medium: Memory  # Required for reliable NFS mount propagation (Kubernetes recommendation)
+mount -t nfs4 -o soft,timeo=30,retrans=3 \
+  decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
 
 containers:
   - name: dfs-mounter
@@ -294,15 +288,14 @@ containers:
 ### w1 → w2 failover (decypharr AND sonarr move)
 1. w1 fails → Longhorn detects node down (~60s)
 2. `decypharr-streaming-0` rescheduled to w2
-   - Creates hostPath `/mnt/k8s/decypharr-streaming-dfs` on w2 (DirectoryOrCreate)
-   - Decypharr re-establishes FUSE mount (Bidirectional → propagates to w2 host)
-   - rclone sidecar sees FUSE (HostToContainer), resumes NFS service
+   - Decypharr re-establishes FUSE mount at `/mnt/dfs` (local to container)
+   - rclone starts serving NFSv4 once FUSE is ready (~5–30s for DFS reconnect)
 3. `sonarr-0` rescheduled to w2 simultaneously
    - **Pod starts immediately** (no NFS dependency at schedule time)
    - `dfs-mounter` sidecar begins retrying mount loop
    - Once decypharr-streaming is ready, sidecar connects → `/mnt/dfs` appears in sonarr container
    - Total extra latency: 0–15s for sidecar retry cycle
-4. `decypharr-streaming-nfs` ClusterIP unchanged — rclone on w2 now answers it
+4. `decypharr-streaming-nfs` ClusterIP unchanged — rclone in the decypharr container on w2 now answers it
 
 ### w1 recovers (automatic failback via descheduler)
 1. Descheduler detects pods on w2 violating `preferredDuringScheduling` (prefer w1)
@@ -314,7 +307,7 @@ containers:
 
 ## Future: Plex and ClusterPlex Worker (Phase 7)
 
-Both use the **identical sidecar pattern**. Template to copy:
+Both use the **identical consumer sidecar pattern**. Template to copy:
 
 ```yaml
 # Add to any new consumer pod's spec.containers:
@@ -360,8 +353,8 @@ ClusterPlex worker on w3 uses this exact template. The NFSv4 connection traverse
 
 | File | Change |
 |---|---|
-| `clusters/homelab/apps/media/decypharr-streaming/statefulset.yaml` | emptyDir → hostPath; add mountPropagation to both containers |
-| `clusters/homelab/apps/media/sonarr/statefulset.yaml` | Remove kubelet NFS volume; add dfs-mounter sidecar |
-| `clusters/homelab/apps/media/radarr/statefulset.yaml` | Same as sonarr |
+| `clusters/homelab/apps/media/decypharr-streaming/statefulset.yaml` | Merged rclone into decypharr container; removed rclone-nfs-server sidecar and dfs emptyDir volume |
+| `clusters/homelab/apps/media/sonarr/statefulset.yaml` | In-pod dfs-mounter sidecar (unchanged) |
+| `clusters/homelab/apps/media/radarr/statefulset.yaml` | In-pod dfs-mounter sidecar (unchanged) |
 
 `service-nfs.yaml` is unchanged — ClusterIP is correct for this pattern (resolved by CoreDNS inside pods, not by kubelet).
