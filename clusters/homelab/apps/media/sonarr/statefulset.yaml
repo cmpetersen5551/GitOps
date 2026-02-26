@@ -67,49 +67,11 @@ spec:
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
-        - name: dfs-shared  # In-pod sidecar mounts NFS here; shared with sonarr container
-          emptyDir: {}  # Plain dir — dfs-mounter mounts NFS here; medium:Memory was a mountpoint itself, blocking the NFS check
+        - name: dfs
+          hostPath:
+            path: /mnt/decypharr-dfs
+            type: Directory      # Pre-created shared bind mount, mounted by dfs-mounter DaemonSet
       containers:
-        # Sidecar: mounts DFS from decypharr-streaming inside pod network namespace
-        # Uses CoreDNS (not kubelet host DNS), auto-reconnects if NFS blips.
-        # See docs/DFS_MOUNT_STRATEGY.md for full architecture rationale.
-        - name: dfs-mounter
-          image: alpine:3.19
-          imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              apk add --no-cache sshfs openssh-client sshpass --quiet
-              mkdir -p /mnt/dfs
-              while true; do
-                # Check if SFTP mount is active and responsive
-                if grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
-                  if ! test -e /mnt/dfs/. 2>/dev/null; then
-                    echo "DFS mount is stale, unmounting..."
-                    umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
-                  fi
-                fi
-                # Mount if SFTP not currently mounted
-                if ! grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
-                  echo "Attempting SFTP mount with password auth..."
-                  sshpass -p '' sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,ConnectTimeout=5 \
-                    @decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs 2>&1 && echo "DFS mounted" || echo "DFS mount failed, retrying..."
-                fi
-                sleep 15
-              done
-          securityContext:
-            privileged: true  # Required for Bidirectional mountPropagation
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 100m
-              memory: 64Mi
-          volumeMounts:
-            - name: dfs-shared
-              mountPath: /mnt/dfs
-              mountPropagation: Bidirectional
         - name: sonarr
           image: linuxserver/sonarr:4.0.16
           imagePullPolicy: IfNotPresent
@@ -159,7 +121,7 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library
               mountPath: /mnt/media
-            - name: dfs-shared  # Provided by dfs-mounter sidecar
+            - name: dfs  # Host-level CIFS mount to decypharr-streaming DFS, mounted by dfs-mounter DaemonSet
               mountPath: /mnt/dfs
               mountPropagation: HostToContainer
             - name: streaming-media  # Symlinks and streamed content

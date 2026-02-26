@@ -7,3 +7,4 @@ resources:
   - ./longhorn      # HA storage (2-node replication)
   - ./fencing       # Volume-fencing cronjob for HA failover
   - ./descheduler   # Automatic failback to primary node (active-passive HA)
+  - ./dfs-mounter   # CIFS mount for Decypharr DFS on all storage/GPU nodes

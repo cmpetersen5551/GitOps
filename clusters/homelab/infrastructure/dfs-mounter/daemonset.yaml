@@ -1,0 +1,86 @@
+---
+# DFS Mounter DaemonSet
+# Runs on all storage nodes (w1, w2) and GPU node (w3)
+# Mounts Decypharr's FUSE-backed DFS via rclone SMB as kernel CIFS on host's /mnt/decypharr-dfs
+# App pods access via hostPath volume with HostToContainer propagation (no privilege required)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dfs-mounter
+  namespace: media
+  labels:
+    app: dfs-mounter
+spec:
+  selector:
+    matchLabels:
+      app: dfs-mounter
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: dfs-mounter
+    spec:
+      hostPID: false
+      hostNetwork: false   # Use pod network → CoreDNS resolves ClusterIP service names
+      priorityClassName: system-node-critical
+      tolerations:
+        # Storage nodes
+        - key: node.longhorn.io/storage
+          operator: Exists
+          effect: NoSchedule
+        # GPU nodes (if any)
+        - key: node.kubernetes.io/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: dfs-mounter
+          image: alpine:3.19
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              apk add --no-cache cifs-utils --quiet
+              mkdir -p /mnt/decypharr-dfs
+              while true; do
+                # Check if mounted and responsive
+                if mountpoint -q /mnt/decypharr-dfs 2>/dev/null; then
+                  if ! timeout 3 ls /mnt/decypharr-dfs >/dev/null 2>&1; then
+                    echo "CIFS mount stale, force-unmounting..."
+                    umount -f /mnt/decypharr-dfs 2>/dev/null || umount -l /mnt/decypharr-dfs 2>/dev/null || true
+                  fi
+                fi
+                # Mount if not mounted
+                if ! mountpoint -q /mnt/decypharr-dfs 2>/dev/null; then
+                  echo "Mounting DFS via CIFS..."
+                  mount -t cifs \
+                    //decypharr-streaming-smb.media.svc.cluster.local/ \
+                    /mnt/decypharr-dfs \
+                    -o guest,vers=3.0,uid=1000,gid=1000 \
+                    && echo "DFS mounted" || echo "Mount failed, retrying in 15s..."
+                fi
+                sleep 15
+              done
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: dfs-host
+              mountPath: /mnt/decypharr-dfs
+              mountPropagation: Bidirectional
+      volumes:
+        - name: dfs-host
+          hostPath:
+            path: /mnt/decypharr-dfs
+            type: Directory    # Must pre-exist as shared bind mount on nodes (see node prep)

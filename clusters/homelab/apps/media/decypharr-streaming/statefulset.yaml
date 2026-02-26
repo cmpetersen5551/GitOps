@@ -92,9 +92,9 @@ spec:
               until grep -q ' /mnt/dfs ' /proc/mounts 2>/dev/null; do
                 sleep 2
               done
-              echo "DFS FUSE ready — starting rclone SFTP server on :2022"
+              echo "DFS FUSE ready — starting rclone SMB server on :445"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                rclone serve sftp /mnt/dfs --addr=0.0.0.0:2022 --user "" --pass "" --log-level INFO || true
+                rclone serve smb /mnt/dfs --addr=0.0.0.0:445 --no-auth --log-level INFO || true
                 sleep 5
               done
           securityContext:
@@ -105,8 +105,8 @@ spec:
           ports:
             - containerPort: 8282
               name: http
-            - containerPort: 2049
-              name: nfs
+            - containerPort: 445
+              name: smb
               protocol: TCP
           env:
             - name: PUID
