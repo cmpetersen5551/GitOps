@@ -91,7 +91,7 @@ spec:
                 fi
                 # Mount if SFTP not currently mounted
                 if ! grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
-                  sshfs -f -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 \
+                  sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 \
                     root@decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs && echo "DFS mounted" || echo "DFS mount failed, retrying..."
                 fi
                 sleep 15
