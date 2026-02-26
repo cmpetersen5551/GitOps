@@ -157,9 +157,8 @@ spec:
           volumeMounts:
             - name: config  # Matches volumeClaimTemplate name
               mountPath: /config
-            - name: media-nfs  # Unraid media library (read-only)
+            - name: media-nfs  # Unraid media library
               mountPath: /mnt/media
-              readOnly: true
             - name: dfs-shared  # Provided by dfs-mounter sidecar
               mountPath: /mnt/dfs
               mountPropagation: HostToContainer
