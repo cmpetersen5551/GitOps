@@ -82,18 +82,18 @@ spec:
               apk add --no-cache nfs-utils --quiet
               mkdir -p /mnt/dfs
               while true; do
-                # Check if currently mounted and responsive (not stale)
-                if mountpoint -q /mnt/dfs 2>/dev/null; then
+                # Check if NFS mount is active and responsive
+                if grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts; then
                   if ! timeout 3 touch /mnt/dfs/.health-check 2>/dev/null; then
                     echo "DFS mount is stale, forcing unmount..."
                     umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
                   fi
                 fi
-                # Mount if not currently mounted (or just force-unmounted above)
-                if ! mountpoint -q /mnt/dfs 2>/dev/null; then
+                # Mount if NFS not currently mounted
+                if ! grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts; then
                   mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
                     decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
-                    2>&1 | grep -q "already mounted" && echo "DFS already mounted" || echo "DFS mount attempt completed"
+                    && echo "DFS mounted" || echo "DFS mount failed, retrying..."
                 fi
                 sleep 15
               done
