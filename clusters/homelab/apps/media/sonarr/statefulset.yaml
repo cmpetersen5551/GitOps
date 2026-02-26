@@ -82,18 +82,10 @@ spec:
               apk add --no-cache nfs-utils --quiet
               mkdir -p /mnt/dfs
               while true; do
-                # If mounted, verify it's not stale (server restarted/failed)
-                if mountpoint -q /mnt/dfs; then
-                  if ! timeout 5 ls /mnt/dfs > /dev/null 2>&1; then
-                    echo "DFS mount is stale, forcing unmount..."
-                    umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
-                  fi
-                fi
-                # Mount if not already mounted (or just unmounted above)
-                if ! mountpoint -q /mnt/dfs; then
-                  mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=150,retrans=3 \
+                if ! grep -qs 'decypharr-streaming-nfs' /proc/mounts; then
+                  mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,hard,timeo=30,retrans=3 \
                     decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
-                    && echo "DFS mounted OK" || echo "DFS mount failed, retrying in 15s..."
+                    && echo "DFS mounted" || echo "DFS mount failed, retrying..."
                 fi
                 sleep 15
               done
@@ -159,7 +151,6 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library (read-only)
               mountPath: /mnt/media
-              readOnly: true
             - name: dfs-shared  # Provided by dfs-mounter sidecar
               mountPath: /mnt/dfs
               mountPropagation: HostToContainer
