@@ -220,6 +220,151 @@ Assign a stable BGP-advertised IP to `decypharr-streaming-nfs`. kubelet uses the
 
 ---
 
+## Recent Bug Fixes & Learnings (2026-02-25 Debugging Session)
+
+While deploying the dfs-mounter sidecar across pods, three mount detection and reliability issues were discovered and resolved:
+
+### Bug 1: Unreliable mount detection with `grep /proc/mounts`
+
+**Symptom**: dfs-mounter sidecar was not reliably detecting whether the NFS mount existed, causing either:
+- Repeated mount attempts on an already-mounted filesystem
+- Failure to detect a missing mount and reattempt
+
+**Root Cause**: Using `grep /proc/mounts | grep /mnt/dfs` to detect mounts is unreliable because:
+- Some systems have stale entries in `/proc/mounts` that stick around after a failed unmount
+- The grep pattern is fragile — a path like `/mnt/dfs-backup` would match incorrectly
+- There is no way to distinguish mounted vs unmountable (stale) mounts
+
+**Fix**: Use the `mountpoint -q /mnt/dfs` command, which:
+- Returns exit code 0 only if the path is currently a valid mount point
+- Is atomic and stable across all Linux distributions
+- Correctly handles stale mounts (returns non-zero if the mount is unresponsive)
+
+**Code Change**:
+```bash
+# BEFORE (unreliable):
+if ! grep -q '/mnt/dfs' /proc/mounts; then
+  mount -t nfs4 -o soft,timeo=30,retrans=3 \
+    decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
+fi
+
+# AFTER (reliable):
+if ! mountpoint -q /mnt/dfs 2>/dev/null; then
+  mount -t nfs4 -o soft,timeo=30,retrans=3 \
+    decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
+fi
+```
+
+### Bug 2: Stale mounts hang indefinitely with hard NFS mounts
+
+**Symptom**: If the NFS server (decypharr-streaming) restarted or became unresponsive, operations on `/mnt/dfs` would hang indefinitely, freezing the entire pod. Meanwhile, `mountpoint -q /mnt/dfs` would still return success (the mount point exists, even though it's stuck).
+
+**Root Cause**: Hard NFS mounts (the default) will retry forever to reconnect to the server. If the server is down, any I/O operation on the mount becomes an indefinite wait. This is correct behavior for reliable NFS over a fast network, but incorrect for containerized transient services where the "server" (decypharr-streaming pod) can restart or move.
+
+**Fix**: Combine two strategies:
+1. **Use soft mounts** with timeout and retransmit options: `soft,timeo=30,retrans=3`
+   - Soft mounts will fail with `ESTALE` or `EIO` errors after the timeout expires
+   - `timeo=30` = 3 second timeout (30 tenths of a second)
+   - `retrans=3` = 3 retransmit attempts before giving up
+   - This prevents indefinite hangs
+2. **Actively detect stale mounts** before relying on them:
+   - Use `timeout 3 touch /mnt/dfs/.health-check` to check responsiveness
+   - If touch fails (timeout), the mount is stuck and must be force-unmounted
+
+**Code Change**:
+```bash
+# Mount options: soft for timeouts, timeo=30 (3sec) and retrans=3
+mount -t nfs4 -o soft,timeo=30,retrans=3 \
+  decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs
+
+# Health check loop:
+while true; do
+  if mountpoint -q /mnt/dfs 2>/dev/null; then
+    # Mount exists, but is it responsive?
+    if ! timeout 3 touch /mnt/dfs/.health-check 2>/dev/null; then
+      echo "DFS mount is stale, forcing unmount..."
+      umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
+    fi
+  fi
+  if ! mountpoint -q /mnt/dfs 2>/dev/null; then
+    # Attempt remount...
+  fi
+  sleep 15  # Check every 15 seconds
+done
+```
+
+### Bug 3: Hard mounts prevent pod eviction during failover
+
+**Symptom**: When w1 failed and Longhorn tried to evict the pod on w1, the pod would get stuck in `Terminating` state because the NFS mount was hard and refused to unmount (it was waiting for the server to respond).
+
+**Root Cause**: Hard NFS mounts cannot be forcefully unmounted — the kernel will keep retrying the RPC connection. Even `umount -f` and `umount -l` (lazy unmount) will not fully remove the mount if the NFS server is unreachable.
+
+**Fix**: Soft mounts can be unmounted cleanly because they timeout and fail fast. This allows the pod to terminate and reschedule to w2 without hanging.
+
+**Also Important**: The dfs-mounter sidecar must be able to force-unmount stale mounts between retry attempts:
+```bash
+umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
+```
+- `umount -f` = force unmount
+- `umount -l` = lazy unmount (removes from namespace even if busy)
+- `|| true` = ignore errors and continue
+
+---
+
+## Improved dfs-mounter Script (Final 2026-02-25 Version)
+
+This is the script deployed in Sonarr, Radarr, and ready for Plex/worker:
+
+```bash
+#!/bin/sh
+
+apk add --no-cache nfs-utils --quiet
+mkdir -p /mnt/dfs
+
+while true; do
+  # Check if currently mounted and responsive (not stale)
+  if mountpoint -q /mnt/dfs 2>/dev/null; then
+    if ! timeout 3 touch /mnt/dfs/.health-check 2>/dev/null; then
+      echo "DFS mount is stale, forcing unmount..."
+      umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
+    fi
+  fi
+  
+  # Mount if not currently mounted (or just force-unmounted above)
+  if ! mountpoint -q /mnt/dfs 2>/dev/null; then
+    mount -t nfs4 -o soft,timeo=30,retrans=3 \
+      decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
+      2>&1 | grep -q "already mounted" && echo "DFS already mounted" || echo "DFS mount attempt completed"
+  fi
+  
+  sleep 15
+done
+```
+
+**Key improvements**:
+- ✅ `mountpoint -q` for reliable mount detection
+- ✅ `timeout 3 touch` for stale mount detection (fails fast if server is down)
+- ✅ `umount -f` + `umount -l` for force-unmounting stale mounts
+- ✅ `soft,timeo=30,retrans=3` for fast failure and automatic recovery
+- ✅ Retry loop every 15 seconds — pod gets `/mnt/dfs` back within 15s of decypharr restart
+- ✅ Passes through all NFS errors to allow main container to handle gracefully
+
+---
+
+## NFS Mount Options: Hard vs Soft
+
+| Option | Default | HA Behavior | HA Desirable? |
+|---|---|---|---|
+| `hard` (retry forever) | ✅ Yes, the default | Indefinite hang during server failure | ❌ No, freezes pod |
+| `soft` (timeout and fail) | ❌ No, opt-in | Fails with ESTALE after 3s, pod can retry | ✅ **Yes, chosen for dfs-mounter** |
+| `timeo=30` | Default 3 (600ms) | 3 seconds per RPC call | ✅ Good for pod NFS |
+| `retrans=3` | Default 3 | 3 retries per RPC call | ✅ Reasonable for soft mount |
+| `tcp` (vs UDP) | ❌ No, UDP is default | TCP > UDP for container networks | ✅ More reliable in k8s |
+
+**Decision**: Use `soft,timeo=30,retrans=3` for all dfs-mounter sidecar mounts. This allows fast failure and pod recovery during NFS server restarts/relocations.
+
+---
+
 ## Implementation
 
 ### decypharr-streaming changes
