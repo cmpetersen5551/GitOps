@@ -1,6 +1,6 @@
 ---
-# ClusterIP Service for Decypharr Streaming NFS export (rclone-nfs-server sidecar)
-# Other pods mount this service at /mnt/dfs to access the DFS cache
+# ClusterIP Service for Decypharr Streaming NFS export (rclone-nfs-server)
+# DaemonSet pods mount this service to access the DFS NFS export
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,7 +13,7 @@ spec:
   selector:
     app: decypharr-streaming
   ports:
-    - name: sftp
-      port: 2022
-      targetPort: 2022
+    - name: nfs
+      port: 2049
+      targetPort: 2049
       protocol: TCP

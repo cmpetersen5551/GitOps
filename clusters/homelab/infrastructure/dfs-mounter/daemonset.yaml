@@ -58,23 +58,23 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              apk add --no-cache cifs-utils --quiet
+              apk add --no-cache nfs-utils --quiet
               mkdir -p /mnt/decypharr-dfs
               while true; do
                 # Check if mounted and responsive
                 if mountpoint -q /mnt/decypharr-dfs 2>/dev/null; then
                   if ! timeout 3 ls /mnt/decypharr-dfs >/dev/null 2>&1; then
-                    echo "CIFS mount stale, force-unmounting..."
+                    echo "NFS mount stale, force-unmounting..."
                     umount -f /mnt/decypharr-dfs 2>/dev/null || umount -l /mnt/decypharr-dfs 2>/dev/null || true
                   fi
                 fi
                 # Mount if not mounted
                 if ! mountpoint -q /mnt/decypharr-dfs 2>/dev/null; then
-                  echo "Mounting DFS via CIFS..."
-                  mount -t cifs \
-                    //decypharr-streaming-smb.media.svc.cluster.local/ \
+                  echo "Mounting DFS via NFS..."
+                  mount -t nfs \
+                    -o vers=3,soft,timeo=10,retrans=3,rsize=32768,wsize=32768 \
+                    decypharr-streaming-nfs.media.svc.cluster.local:/ \
                     /mnt/decypharr-dfs \
-                    -o guest,vers=3.0,uid=1000,gid=1000 \
                     && echo "DFS mounted" || echo "Mount failed, retrying in 15s..."
                 fi
                 sleep 15

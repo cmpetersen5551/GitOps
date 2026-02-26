@@ -90,7 +90,7 @@ See [helmrelease.yaml](./helmrelease.yaml) for full configuration.
 
 ## DFS Mount Point Preparation for Decypharr (w1, w2, w3)
 
-The DFS mounter DaemonSet (infrastructure/dfs-mounter) requires a pre-configured shared bind mount on storage and GPU nodes to enable kernel-level CIFS mount propagation.
+The DFS mounter DaemonSet (infrastructure/dfs-mounter) requires a pre-configured shared bind mount on storage and GPU nodes to enable kernel-level NFS mount propagation.
 
 ### Create Shared Bind Mount (One-Time Setup)
 
@@ -148,7 +148,7 @@ sudo systemctl start mnt-decypharr\\x2ddfs.mount
 
 - **Host-Level Bind Mount**: Kubernetes pods cannot directly create or modify host mounts. This must be set up manually.
 - **Shared Propagation**: By default, `/mnt` on k3s is in a `private` peer group. The explicit `--make-shared` command breaks it out into a shared peer group, allowing container mounts to propagate to the host namespace.
-- **CIFS Mount Point**: The DaemonSet pod uses `mount -t cifs` (kernel CIFS, not FUSE) to mount the DFS via SMB. The kernel mount only propagates through shared peer groups.
+- **NFS Mount Point**: The DaemonSet pod uses `mount -t nfs` (kernel NFS, not FUSE) to mount the DFS via NFS from rclone. The kernel mount only propagates through shared peer groups.
 - **Application Access**: App pods (Sonarr, Radarr, Plex, ClusterPlex workers) access `/mnt/decypharr-dfs` via `hostPath` volume with `HostToContainer` propagation. No privilege required.
 
 ### Verification
@@ -160,8 +160,8 @@ After configuration, verify on each node:
 mountpoint /mnt/decypharr-dfs
 cat /proc/self/mountinfo | grep decypharr-dfs
 
-# After DaemonSet deployment, check CIFS mount is active
+# After DaemonSet deployment, check NFS mount is active
 mount | grep decypharr-dfs
-# Expected: //decypharr-streaming-smb.media.svc.cluster.local/ on /mnt/decypharr-dfs type cifs ...
+# Expected: decypharr-streaming-nfs.media.svc.cluster.local:/ on /mnt/decypharr-dfs type nfs ...
 ```
 

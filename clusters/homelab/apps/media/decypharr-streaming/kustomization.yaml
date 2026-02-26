@@ -4,6 +4,6 @@ kind: Kustomization
 resources:
   - statefulset.yaml
   - service-api.yaml
-  - service-smb.yaml
+  - service-nfs.yaml
   - service-headless.yaml
   - ingress.yaml
