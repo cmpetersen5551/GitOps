@@ -5,7 +5,7 @@ metadata:
   namespace: media
 spec:
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteMany
   resources:
     requests:
       storage: 1Ti
