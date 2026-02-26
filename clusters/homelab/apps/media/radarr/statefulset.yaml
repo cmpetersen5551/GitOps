@@ -91,7 +91,7 @@ spec:
                 fi
                 # Mount if not currently mounted (or just force-unmounted above)
                 if ! mountpoint -q /mnt/dfs 2>/dev/null; then
-                  mount -t nfs4 -o soft,timeo=30,retrans=3 \
+                  mount -t nfs -o vers=3,soft,timeo=30,retrans=3 \
                     decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
                     2>&1 | grep -q "already mounted" && echo "DFS already mounted" || echo "DFS mount attempt completed"
                 fi
