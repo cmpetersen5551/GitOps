@@ -79,21 +79,20 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              apk add --no-cache nfs-utils --quiet
+              apk add --no-cache sshfs openssh-client --quiet
               mkdir -p /mnt/dfs
               while true; do
-                # Check if NFS mount is active and responsive
-                if grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts; then
+                # Check if SFTP mount is active and responsive
+                if grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
                   if ! timeout 3 touch /mnt/dfs/.health-check 2>/dev/null; then
                     echo "DFS mount is stale, forcing unmount..."
                     umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
                   fi
                 fi
-                # Mount if NFS not currently mounted
-                if ! grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts; then
-                  mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=30,retrans=3 \
-                    decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs \
-                    && echo "DFS mounted" || echo "DFS mount failed, retrying..."
+                # Mount if SFTP not currently mounted
+                if ! grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
+                  sshfs -f -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 \
+                    root@decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs && echo "DFS mounted" || echo "DFS mount failed, retrying..."
                 fi
                 sleep 15
               done

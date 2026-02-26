@@ -13,7 +13,7 @@ spec:
   selector:
     app: decypharr-streaming
   ports:
-    - name: nfs
-      port: 2049
-      targetPort: 2049
+    - name: sftp
+      port: 2022
+      targetPort: 2022
       protocol: TCP

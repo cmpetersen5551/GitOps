@@ -92,9 +92,9 @@ spec:
               until grep -q ' /mnt/dfs ' /proc/mounts 2>/dev/null; do
                 sleep 2
               done
-              echo "DFS FUSE ready — starting rclone NFS server on :2049"
+              echo "DFS FUSE ready — starting rclone SFTP server on :2022"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                rclone serve nfs /mnt/dfs --addr=0.0.0.0:2049 || true
+                rclone serve sftp /mnt/dfs --addr=0.0.0.0:2022 --no-auth || true
                 sleep 5
               done
           securityContext:
