@@ -37,16 +37,19 @@ spec:
                     values:
                       - enabled
               - matchExpressions:
-                  - key: node.kubernetes.io/gpu
-                    operator: Exists
+                  - key: gpu
+                    operator: In
+                    values:
+                      - "true"
       tolerations:
         # Storage nodes
         - key: node.longhorn.io/storage
           operator: Exists
           effect: NoSchedule
         # GPU nodes (if any)
-        - key: node.kubernetes.io/gpu
-          operator: Exists
+        - key: gpu
+          operator: Equal
+          value: "true"
           effect: NoSchedule
       containers:
         - name: dfs-mounter
