@@ -26,6 +26,19 @@ spec:
       hostPID: false
       hostNetwork: false   # Use pod network → CoreDNS resolves ClusterIP service names
       priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              # Run on storage nodes (w1, w2) OR GPU nodes (w3)
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+              - matchExpressions:
+                  - key: node.kubernetes.io/gpu
+                    operator: Exists
       tolerations:
         # Storage nodes
         - key: node.longhorn.io/storage
