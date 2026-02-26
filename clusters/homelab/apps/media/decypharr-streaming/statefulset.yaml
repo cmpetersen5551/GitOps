@@ -94,7 +94,7 @@ spec:
               done
               echo "DFS FUSE ready — starting rclone SFTP server on :2022"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                rclone serve sftp /mnt/dfs --addr=0.0.0.0:2022 --no-auth || true
+                rclone serve sftp /mnt/dfs --addr=0.0.0.0:2022 --user "" --pass "" --log-level INFO || true
                 sleep 5
               done
           securityContext:

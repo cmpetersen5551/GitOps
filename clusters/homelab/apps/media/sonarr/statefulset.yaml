@@ -79,21 +79,21 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              apk add --no-cache sshfs openssh-client --quiet
+              apk add --no-cache sshfs openssh-client sshpass --quiet
               mkdir -p /mnt/dfs
               while true; do
                 # Check if SFTP mount is active and responsive
                 if grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
-                  if ! timeout 2 test -e /mnt/dfs 2>/dev/null; then
+                  if ! test -e /mnt/dfs/. 2>/dev/null; then
                     echo "DFS mount is stale, unmounting..."
                     umount -f /mnt/dfs 2>/dev/null || umount -l /mnt/dfs 2>/dev/null || true
                   fi
                 fi
                 # Mount if SFTP not currently mounted
                 if ! grep -qs 'decypharr-streaming-nfs.*fuse' /proc/mounts; then
-                  echo "Attempting SFTP mount..."
-                  timeout 10 sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,ConnectTimeout=5 \
-                    root@decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs 2>&1 && echo "DFS mounted" || echo "DFS mount failed, retrying..."
+                  echo "Attempting SFTP mount with password auth..."
+                  sshpass -p '' sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,ConnectTimeout=5 \
+                    @decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/dfs 2>&1 && echo "DFS mounted" || echo "DFS mount failed, retrying..."
                 fi
                 sleep 15
               done
