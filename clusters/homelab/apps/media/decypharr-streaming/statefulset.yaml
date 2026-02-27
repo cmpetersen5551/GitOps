@@ -75,9 +75,11 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 30
-      # Decypharr main container with FUSE client + rclone NFS server
-      # Both run in the SAME mount namespace — rclone sees /mnt/dfs directly without
-      # any cross-container mount propagation (which is fundamentally broken in k8s).
+      # Decypharr main container with FUSE client + Samba (smbd) server.
+      # smbd MUST run in the same container as decypharr — Kubernetes gives each
+      # container its own mount namespace, so a sidecar can never see the FUSE
+      # mount at /mnt/dfs. Running smbd here is identical in principle to how
+      # rclone serve nfs ran here before.
       containers:
         - name: decypharr
           image: cy01/blackhole:beta
@@ -85,16 +87,39 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              mkdir -p /mnt/dfs
+              apk add --no-cache samba --quiet
+              mkdir -p /mnt/dfs /var/lib/samba /var/log/samba /run/samba
+              cat > /etc/samba/smb.conf << 'SMBCONF'
+              [global]
+                workgroup = WORKGROUP
+                server string = decypharr-dfs
+                security = user
+                map to guest = Bad User
+                guest account = nobody
+                log level = 1
+                log file = /dev/stderr
+                max log size = 0
+                load printers = no
+                printing = bsd
+                printcap name = /dev/null
+                disable spoolss = yes
+                server min protocol = SMB2
+              [dfs]
+                path = /mnt/dfs
+                browseable = yes
+                read only = yes
+                guest ok = yes
+                force user = nobody
+              SMBCONF
               /usr/bin/decypharr --config /config &
               DECYPHARR_PID=$!
               echo "Waiting for DFS FUSE mount at /mnt/dfs..."
               until grep -q ' /mnt/dfs ' /proc/mounts 2>/dev/null; do
                 sleep 2
               done
-              echo "DFS FUSE ready — starting rclone NFS server on :2049"
+              echo "DFS FUSE ready — starting smbd on :445"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                rclone serve nfs /mnt/dfs --addr 0.0.0.0:2049 --vfs-cache-mode=off --dir-cache-time=5s || true
+                smbd --foreground --no-process-group --debuglevel=1 2>&1 || true
                 sleep 5
               done
           securityContext:
@@ -105,8 +130,8 @@ spec:
           ports:
             - containerPort: 8282
               name: http
-            - containerPort: 2049
-              name: nfs
+            - containerPort: 445
+              name: smb
               protocol: TCP
           env:
             - name: PUID

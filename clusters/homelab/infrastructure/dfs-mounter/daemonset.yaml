@@ -1,8 +1,9 @@
 ---
 # DFS Mounter DaemonSet
 # Runs on all storage nodes (w1, w2) and GPU node (w3)
-# Mounts Decypharr's FUSE-backed DFS via rclone SMB as kernel CIFS on host's /mnt/decypharr-dfs
+# Mounts Decypharr's FUSE-backed DFS via Samba (smbd) as kernel CIFS on host's /mnt/decypharr-dfs
 # App pods access via hostPath volume with HostToContainer propagation (no privilege required)
+# CIFS kernel client auto-reconnects when smbd restarts — no consumer pod restart needed
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -58,27 +59,27 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              apk add --no-cache nfs-utils --quiet
+              apk add --no-cache cifs-utils --quiet
               mkdir -p /mnt/decypharr-dfs
               while true; do
-                # Check specifically for NFS mount — NOT mountpoint -q which returns true
-                # for the hostPath bind-mount itself, causing NFS to never be attempted.
-                if grep -q '/mnt/decypharr-dfs nfs' /proc/mounts 2>/dev/null; then
+                # Check specifically for CIFS mount — NOT mountpoint -q which returns true
+                # for the hostPath bind-mount itself, causing CIFS to never be attempted.
+                if grep -q '/mnt/decypharr-dfs cifs' /proc/mounts 2>/dev/null; then
                   if ! timeout 3 ls /mnt/decypharr-dfs >/dev/null 2>&1; then
-                    echo "NFS mount stale, force-unmounting..."
+                    echo "CIFS mount stale, force-unmounting..."
                     umount -f /mnt/decypharr-dfs 2>/dev/null || umount -l /mnt/decypharr-dfs 2>/dev/null || true
                   fi
                 fi
-                # Mount NFS if not specifically mounted yet.
-                # port=2049,mountport=2049 required: rclone serve nfs has no portmapper,
-                # so the kernel NFS client hangs forever waiting for rpcbind without them.
-                if ! grep -q '/mnt/decypharr-dfs nfs' /proc/mounts 2>/dev/null; then
-                  echo "Mounting DFS via NFS..."
-                  mount -t nfs \
-                    -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=10,retrans=3,rsize=32768,wsize=32768,actimeo=1 \
-                    decypharr-streaming-nfs.media.svc.cluster.local:/ \
+                # Mount CIFS if not already mounted.
+                # CIFS kernel client auto-reconnects when smbd restarts — unlike NFS soft mounts
+                # which become permanently stale and require a pod restart to recover.
+                if ! grep -q '/mnt/decypharr-dfs cifs' /proc/mounts 2>/dev/null; then
+                  echo "Mounting DFS via CIFS..."
+                  mount -t cifs \
+                    //decypharr-streaming-smb.media.svc.cluster.local/dfs \
                     /mnt/decypharr-dfs \
-                    && echo "DFS mounted" || echo "Mount failed, retrying in 15s..."
+                    -o guest,uid=0,gid=0,file_mode=0755,dir_mode=0755,vers=3.0 \
+                    && echo "DFS mounted via CIFS" || echo "Mount failed, retrying in 15s..."
                 fi
                 sleep 15
               done

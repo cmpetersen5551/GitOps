@@ -70,24 +70,7 @@ spec:
         - name: dfs
           hostPath:
             path: /mnt/decypharr-dfs
-            type: Directory      # Pre-created shared bind mount, mounted by dfs-mounter DaemonSet
-      # Wait for DFS mount to be accessible before starting Radarr.
-      # Prevents startup with a stale NFS mount after Decypharr restarts.
-      initContainers:
-        - name: wait-for-dfs
-          image: busybox:1.36
-          command: ['/bin/sh', '-c']
-          args:
-            - |
-              echo 'Waiting for DFS mount...'
-              until timeout 3 stat /mnt/dfs >/dev/null 2>&1; do
-                echo 'DFS not ready, retrying in 5s...'; sleep 5;
-              done
-              echo 'DFS mount ready'
-          volumeMounts:
-            - name: dfs
-              mountPath: /mnt/dfs
-              mountPropagation: HostToContainer
+            type: Directory      # Kernel CIFS mount maintained by dfs-mounter DaemonSet, auto-reconnects on smbd restart
       containers:
         - name: radarr
           image: linuxserver/radarr:latest
@@ -110,18 +93,13 @@ spec:
               cpu: 1000m
               memory: 512Mi
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                # Check both Radarr HTTP health AND DFS mount accessibility.
-                # If DFS becomes stale (Decypharr restart), this triggers pod
-                # restart to get a fresh NFS mount via HostToContainer propagation.
-                - 'wget -qO/dev/null http://127.0.0.1:7878/ping 2>/dev/null && timeout 3 stat /mnt/dfs >/dev/null 2>&1'
+            httpGet:
+              path: /ping
+              port: 7878
             initialDelaySeconds: 30
-            periodSeconds: 60
-            timeoutSeconds: 10
-            failureThreshold: 2
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /ping

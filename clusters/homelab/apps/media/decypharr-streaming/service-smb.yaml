@@ -1,0 +1,19 @@
+---
+# ClusterIP Service for Decypharr Streaming SMB/CIFS export (smbd)
+# DaemonSet pods mount this service to access the DFS via kernel CIFS
+apiVersion: v1
+kind: Service
+metadata:
+  name: decypharr-streaming-smb
+  namespace: media
+  labels:
+    app: decypharr-streaming
+spec:
+  type: ClusterIP
+  selector:
+    app: decypharr-streaming
+  ports:
+    - name: smb
+      port: 445
+      targetPort: 445
+      protocol: TCP
