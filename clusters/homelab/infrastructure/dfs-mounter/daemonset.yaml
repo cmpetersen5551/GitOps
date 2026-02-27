@@ -62,14 +62,10 @@ spec:
               apk add --no-cache cifs-utils util-linux --quiet
               mkdir -p /mnt/decypharr-dfs
               while true; do
-                # Check specifically for CIFS mount — NOT mountpoint -q which returns true
-                # for the hostPath bind-mount itself, causing CIFS to never be attempted.
-                if grep -q '/mnt/decypharr-dfs cifs' /proc/mounts 2>/dev/null; then
-                  if ! timeout 3 ls /mnt/decypharr-dfs >/dev/null 2>&1; then
-                    echo "CIFS mount stale, force-unmounting..."
-                    umount -f /mnt/decypharr-dfs 2>/dev/null || umount -l /mnt/decypharr-dfs 2>/dev/null || true
-                  fi
-                fi
+                # CIFS kernel client auto-reconnects when smbd restarts — unlike NFS which
+                # becomes permanently stale. No stale detection or forced remount needed.
+                # This loop only exists to handle: (a) initial mount on pod start,
+                # (b) remounting if the DaemonSet pod itself restarts.
                 if ! grep -q '/mnt/decypharr-dfs cifs' /proc/mounts 2>/dev/null; then
                   # Resolve service hostname using pod's CoreDNS, then mount via nsenter.
                   # CRITICAL: CIFS socket MUST be created in the host's network namespace.
@@ -91,7 +87,7 @@ spec:
                       && echo "DFS mounted via CIFS" || echo "Mount failed, retrying in 15s..."
                   fi
                 fi
-                sleep 15
+                sleep 30
               done
           securityContext:
             privileged: true
