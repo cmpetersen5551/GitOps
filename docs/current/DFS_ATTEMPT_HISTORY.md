@@ -34,7 +34,13 @@ d37fb27  Fix mount detection logic
 2c94eb1  Fix sshfs -f foreground flag (mount loop hung forever)
 1f98f89  Add timeout + ConnectTimeout to sshfs
 ab74472  Try sshpass with empty password + rclone --user/--pass flags
-         ← CURRENT STATE (still broken — sshfs is FUSE)
+767d937  Implement DaemonSet architecture — uses CIFS/SMB (rclone serve smb)
+edd0d35  Switch DaemonSet from CIFS to NFS — rclone v1.73.1 has no serve smb
+f3e6287  Fix DaemonSet nodeAffinity selectors
+ac257b1  Fix DaemonSet nodeAffinity (label key correction)
+4665f76  Fix rclone serve nfs command in decypharr-streaming
+6b633a6  (docs only) Incorrect pivot doc: DaemonSet not working — WRONG conclusion
+64f462b  ← FIX: correct mountpoint check + port options → DaemonSet working ✅
 ```
 
 ---
@@ -203,15 +209,17 @@ Extensive iteration on the `mount -t nfs` command in the dfs-mounter sidecar, at
 
 ### Result
 
-**None of these helped.** The root problem was the `rclone serve nfs` go-nfs server deadlocking on FUSE-backed directories — not client mount options. Mount options only affect how the NFS client behaves once connected. They cannot fix a server-side deadlock.
+**None of these helped in the in-pod sidecar context.** The emptyDir volume isolation was the true root cause for the sidecar approach — the NFS mount was happening in the sidecar's namespace but not propagating to the main container. A "deadlock" was observed in some runs but may have been an artifact of the emptyDir isolation making the NFS server appear unresponsive (the server was receiving the connection but the client side was stuck due to peer group issues).
 
-**Key learning**: Extensive time was spent tuning the client while the server was fundamentally broken. The right diagnostic question was "is the NFS server healthy?" not "are our mount options correct?"
+**Important retroactive correction**: `rclone serve nfs` was NOT deadlocking in the DaemonSet context (Attempts 7/8). The NFS server was healthy and responsive throughout. The "deadlock" conclusion from this period was specific to the emptyDir sidecar architecture — do not apply it to `rclone serve nfs` in general.
+
+**Key learning**: Extensive time was spent tuning the client while the real problem (emptyDir peer group isolation) made it impossible to tell whether the server was healthy or not. The right diagnostic question was "can a *fresh test pod* mount the NFS share directly?" — not "are our mount options correct?"
 
 ### Important Side Learning: emptyDir mount detection
 
 Commit `7e0dbf4` documented an important subtlety: `emptyDir: {medium: Memory}` creates a real tmpfs mountpoint at `/mnt/dfs` inside the container. This caused `mountpoint -q /mnt/dfs` to return success even when no NFS mount was present (it detected the tmpfs, not the NFS). This prevented the NFS mount command from ever running.
 
-Fix: revert to plain `emptyDir: {}` so `/mnt/dfs` is a plain bind-mount directory, and detect NFS presence with `grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts` (check for NFS explicitly, not just any mountpoint).
+Fix: revert to plain `emptyDir: {}` so `/mnt/dfs` is a plain bind-mount directory, and detect NFS presence with `grep -qs 'decypharr-streaming-nfs.*nfs' /proc/mounts` (check for NFS explicitly, not just any mountpoint). This same lesson recurred in Attempt 8 for a different reason — see below.
 
 ---
 
@@ -237,35 +245,122 @@ Subsequent fixes:
 
 By switching from kernel NFS (`mount -t nfs`) to SSHFS (`sshfs`), the protocol changed but the fundamental FUSE propagation problem was reintroduced. The sidecar's `/mnt/dfs` is populated, but the main Sonarr/Radarr container's `/mnt/dfs` remains empty.
 
-**Current state**: This is what is deployed right now (Feb 25, 2026). It does not work. `/mnt/dfs` in Sonarr/Radarr is empty.
+**This was the final sidecar-based attempt.** After this, the architecture changed entirely to a DaemonSet approach (Attempt 7).
 
-**Root cause of the oversight**: The focus was on why NFS wasn't working (server deadlock → protocol change) without recognizing that the protocol choice determined whether the *client* mount was FUSE or kernel-level.
+**Root cause of the oversight**: The focus was on why NFS wasn't working (perceived server deadlock → protocol change) without recognizing that the protocol choice determined whether the *client* mount was FUSE or kernel-level.
 
 ---
 
-## Summary: What Was Never Tried
+## Attempt 7: DaemonSet with CIFS/SMB (Immediately Abandoned)
 
-The following approach has not been tested and is the basis for the chosen architecture:
+**Commits**: `767d937`, `edd0d35`  
+**Date**: Feb 26, 2026
 
-| What | Why it should work |
-|---|---|
-| `rclone serve smb` server-side | Different code path from go-nfs. No known FUSE-backed deadlock. SMB is a mature protocol. |
-| `mount -t cifs` client-side | Kernel CIFS module — not FUSE. Kernel VFS mounts propagate correctly through shared peer groups. |
-| `mount --make-shared /mnt/decypharr-dfs` node prep | Creates a dedicated shared peer group, breaking out of root `rprivate`. Enables hostPath propagation. |
-| DaemonSet on per-node | Centralizes mount management, eliminates per-pod sidecar. Standard CSI-driver pattern. |
+### What Was Tried
+
+Introduced the DaemonSet architecture (from `docs/current/DFS_RESEARCH_AND_OPTIONS.md` Option 10). Initial implementation used `rclone serve smb` (server) + `mount -t cifs` (DaemonSet client), which was the original plan.
+
+Commit `767d937` implemented:
+- `infrastructure/dfs-mounter/daemonset.yaml` — privileged DaemonSet, CIFS mount loop
+- `decypharr-streaming` — switched to `rclone serve smb --addr 0.0.0.0:445`
+- Sonarr/Radarr — switched from sidecar to `hostPath: /mnt/decypharr-dfs` + `HostToContainer`
+
+### Why It Was Abandoned Immediately
+
+**`rclone serve smb` does not exist in rclone v1.73.1** (the version in `cy01/blackhole:beta`). Available `rclone serve` subcommands: dlna, docker, ftp, http, **nfs**, restic, s3, sftp, webdav. No smb.
+
+Commit `edd0d35` immediately switched server to `rclone serve nfs --addr 0.0.0.0:2049` and DaemonSet client to `mount -t nfs`. The DaemonSet architecture was kept.
+
+**Key learning**: Always check available `rclone serve` subcommands for the specific image version before designing around them.
+
+---
+
+## Attempt 8: DaemonSet with NFS — Script Bugs Prevented Mount
+
+**Commits**: `edd0d35`, `f3e6287`, `ac257b1`, `4665f76`, `6b633a6`  
+**Date**: Feb 26–27, 2026
+
+### What Was Tried
+
+The NFS-based DaemonSet was deployed and appeared to be running (`kubectl get pods` showed Running/Healthy). Sonarr and Radarr were updated to hostPath + HostToContainer. However `/mnt/dfs` in both pods was empty.
+
+Several fixup commits addressed nodeAffinity labels and the `rclone serve nfs` command format, but the empty-mount symptom persisted. A documentation commit (`6b633a6`) incorrectly concluded the DaemonSet architecture "does not work" and suggested pivoting to direct Kubernetes NFS volumes in Sonarr/Radarr (this change was never applied to the manifests).
+
+### Root Cause: Two Bugs in the DaemonSet Script
+
+**Bug 1 — `mountpoint -q` false positive:**
+
+The DaemonSet script checked `mountpoint -q /mnt/decypharr-dfs` to decide whether to mount. A Kubernetes `hostPath` volume creates a bind-mount of the host directory into the container. This bind-mount is already a kernel mountpoint, so `mountpoint -q` always returns true — regardless of whether NFS is mounted there. The NFS mount was **never attempted on any pod start or loop iteration** since the DaemonSet was first deployed.
+
+**Bug 2 — Missing portmapper bypass options:**
+
+The mount command lacked `port=2049,mountport=2049,tcp,nolock`. The Linux kernel NFS client contacts portmapper (port 111) by default. `rclone serve nfs` has no portmapper. Without these options, every mount attempt hung indefinitely waiting for port 111 — which would also explain why it appeared to work initially (the script ran, took a long time, then "succeeded" in the eyes of the health check while actually timing out).
+
+### Diagnosis Method
+
+Live inspection of the DaemonSet pod:
+```bash
+kubectl exec -n media dfs-mounter-<pod> -- cat /proc/mounts | grep decypharr
+# Output: /dev/sda1 /mnt/decypharr-dfs ext4 ...   (no NFS entry)
+```
+Confirmed NFS was never mounted. Manual test:
+```bash
+mount -t nfs -o vers=3,soft,timeo=10 decypharr-streaming-nfs...:/ /mnt/decypharr-dfs
+# → HANGS (Bug 2)
+mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=10,retrans=3 ...
+# → SUCCESS in ~1 second
+```
+
+---
+
+## Resolution: Two Script Fixes (commit `64f462b`)
+
+**Date**: Feb 27, 2026
+
+### Changes Made
+
+Fixed both bugs in `clusters/homelab/infrastructure/dfs-mounter/daemonset.yaml`:
+
+1. Replaced `mountpoint -q` with `grep -q '/mnt/decypharr-dfs nfs' /proc/mounts`
+2. Added `port=2049,mountport=2049,tcp,nolock` to mount options
+
+Rolled the DaemonSet (`kubectl rollout restart`).
+
+### End-to-End Verification
+
+```bash
+# DaemonSet log: "DFS mounted"
+# Host-level:
+ssh root@k3s-w1 "ls /mnt/decypharr-dfs/"
+# __all__  __bad__  nzbs  torrents  version.txt ✅
+
+# Sonarr:
+kubectl exec -n media sonarr-0 -- ls /mnt/dfs/
+# __all__  __bad__  nzbs  torrents  version.txt ✅
+
+# Radarr:
+kubectl exec -n media radarr-0 -- ls /mnt/dfs/
+# __all__  __bad__  nzbs  torrents  version.txt ✅
+```
+
+No architecture changes needed. No StatefulSet changes needed. The DaemonSet + hostPath approach was and is correct.
 
 ---
 
 ## Lessons Learned
 
-1. **Diagnose server before tuning client.** Extensive NFS option iteration was wasted because the server was deadlocked. Check server health first (`rclone serve nfs` process responsive? NFS export accessible from a test pod?).
+1. **"Running" and "Healthy" DaemonSet pods do not mean the mount succeeded.** Always verify the actual mount state with `cat /proc/mounts` inside the pod, not just pod status.
 
-2. **Know whether a filesystem client is FUSE or kernel.** sshfs, s3fs, goofys — all FUSE. mount -t nfs, mount -t cifs, mount -t ext4 — all kernel. FUSE mounts cannot propagate between containers. Kernel mounts can (if peer groups are correct).
+2. **`mountpoint -q` on a hostPath volume is always true.** The bind-mount of the host directory into the container is itself a mountpoint. Any script that uses `mountpoint -q` on a hostPath volume will be a no-op forever. Use `grep /proc/mounts` to check for a specific filesystem type instead.
 
-3. **emptyDir medium:Memory does NOT enable intra-pod FUSE propagation.** Despite Kubernetes documentation suggesting this, and despite it being theoretically correct, kubelet's container runtime implementation creates separate per-container peer groups that break it.
+3. **rclone serve nfs has no portmapper.** Always include `port=2049,mountport=2049,tcp,nolock` when mounting. Without these, the Linux kernel NFS client hangs indefinitely on port 111.
 
-4. **hostPath propagation requires `shared` parent mount.** Any hostPath on k3s used for Bidirectional propagation must be on a directory that is a *separate* `shared` bind mount — not a directory on the root `rprivate` filesystem. Verify with `/proc/self/mountinfo` before assuming it will work.
+4. **Know whether a filesystem client is FUSE or kernel before choosing it.** sshfs, s3fs, goofys — all FUSE. `mount -t nfs`, `mount -t cifs`, `mount -t ext4` — all kernel. FUSE mounts cannot propagate between containers. Kernel mounts can.
 
-5. **In-container colocation (same mount namespace) is the correct solution for the server side.** Confirmed and working. Decypharr + rclone in the same container, same mount namespace — no propagation needed.
+5. **emptyDir peer group isolation is the fundamental barrier for in-pod sidecars.** Neither emptyDir plain, emptyDir Memory (tmpfs), nor Bidirectional propagation overcomes per-container peer group isolation for FUSE mounts. The DaemonSet hostPath approach avoids this entirely.
 
-6. **The consumer-side problem is separate from the server-side problem.** Solving server-side (colocated rclone) was correct and necessary, but insufficient. Consumer pods still need a propagation mechanism. The server-side fix enables the protocol re-export to work; the client-side architecture determines whether consumer pods can see it.
+6. **containerd/kubelet handles hostPath peer group setup automatically.** No `mount --make-shared` node preparation is needed. The alleged k3s `/mnt` rprivate limitation was a misdiagnosis.
+
+7. **Check rclone version capabilities before designing around a subcommand.** `rclone serve smb` was architected and implemented before verifying it existed in the deployed image version.
+
+8. **Verify with a fresh test pod before concluding an approach is broken.** A one-line test pod (`kubectl run test --image=alpine --rm -it -- mount -t nfs options server:/ /tmp/test`) would have confirmed within 30 seconds whether the NFS server was healthy — before the entire emptyDir sidecar option space was exhausted.

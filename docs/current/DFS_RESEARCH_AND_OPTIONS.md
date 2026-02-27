@@ -103,12 +103,12 @@ Decypharr docs note WebDAV as lower performance than DFS for streaming.
 
 ---
 
-### Option 6: hostPath + Bidirectional (Tried — Failed)
+### Option 6: hostPath + Bidirectional for FUSE Directly (Tried — Failed)
 **Approach**: Give Decypharr a `hostPath` volume at `/mnt/k8s/decypharr-streaming-dfs` with `mountPropagation: Bidirectional`. Decypharr mounts FUSE inside the container → propagates to host → other pods use `HostToContainer` on same hostPath.
 
-**Status**: ❌ Failed in practice. Root cause: `/mnt/k8s/` sits on the k3s root filesystem which is `rprivate` (private peer group). `Bidirectional` requires the parent mount to be in a `shared` or `rshared` peer group for propagation to cross the container boundary into the host namespace.
+**Status**: ❌ Failed. The FUSE mount created by Decypharr does not propagate even through a shared hostPath. FUSE mounts are created in userspace and do not behave like kernel VFS mounts with respect to peer group propagation in container runtimes.
 
-**Confirmed**: `ssh k3s-w1 "cat /proc/self/mountinfo | grep ' /mnt '"` returned nothing — `/mnt` is not a separate mount. No subdirectory of `/mnt` can be used for hostPath propagation without explicit `mount --make-shared` preparation.
+**Important distinction**: This option failed because **FUSE** mounts cannot propagate through hostPath. This is different from Option 10, which uses a **kernel NFS mount** (not FUSE) inside a DaemonSet — that works correctly. Do not conflate these two approaches. The `/mnt` rprivate concern was a red herring; `cat /proc/self/mountinfo | grep ' /mnt '` returning nothing just means `/mnt` is not its own mount, but `/mnt/decypharr-dfs` still participates in `shared:1` via the root filesystem peer group when used as a hostPath volume.
 
 ---
 
@@ -136,27 +136,29 @@ This is the documented Kubernetes limitation from issue #95049.
 Suboptions for the re-export:
 
 #### 9a: rclone serve nfs (go-nfs) + kernel NFS sidecar
-- **Status**: ❌ `rclone serve nfs` uses the `go-nfs` library which **deadlocks** when the underlying filesystem is FUSE. Observed in production — rclone process hangs after a few operations. Multiple NFS option iterations (nfs4, nfs vers=3, nolock, soft/hard, port=2049/mountport=2049/tcp) did not help because the problem was server-side deadlock, not client mount options.
+- **Status**: ❌ Failed in the **in-pod emptyDir sidecar context** — but for the wrong reasons. A server-side deadlock was observed during testing with the emptyDir sidecar approach, but it is unclear whether the deadlock was real (go-nfs FUSE issue) or an artifact of the emptyDir mount isolation making the server appear unresponsive. Subsequent testing with the DaemonSet approach (Option 10) showed `rclone serve nfs` working correctly with no deadlocks. The NFS server is healthy when mounted with the correct port options: `port=2049,mountport=2049,tcp,nolock`. The sidecar approach itself still fails due to emptyDir peer group isolation (Option 7), which was the root cause of the apparent unresponsiveness.
 
 #### 9b: rclone serve sftp + sshfs sidecar
 - **Status**: ❌ Current state — broken by design. sshfs is a FUSE filesystem. The sidecar creates a FUSE mount and tries to propagate it to the main container via emptyDir Bidirectional. This is the same inter-container FUSE sharing problem. FUSE never propagates. Sonarr/Radarr `/mnt/dfs` is empty.
 
-#### 9c: rclone serve smb + kernel CIFS sidecar ← **Proposed**
-- `rclone serve smb` is a completely different implementation (Go SMB2 library). Not go-nfs. No known FUSE-backed deadlock.
-- `mount -t cifs` is the Linux kernel CIFS/SMB module — not FUSE. Kernel VFS mounts propagate correctly.
-- **Untested in this cluster.** Solid theoretical basis. Selected as Phase 1 of the implementation.
+#### 9c: rclone serve smb + kernel CIFS
+- **Status**: ❌ NOT AVAILABLE. `rclone serve smb` does not exist in rclone v1.73.1 (the version shipped in `cy01/blackhole:beta`). Available `rclone serve` subcommands: dlna, docker, ftp, http, nfs, restic, s3, sftp, webdav. Was briefly implemented (commit `767d937`) and immediately abandoned (commit `edd0d35`) when this was discovered.
 
 ---
 
-### Option 10: DaemonSet + Shared Bind Mount + Kernel CIFS ← **CHOSEN**
-**Approach**: Node-level preparation creates `/mnt/decypharr-dfs` as a `shared` bind mount on each node. A privileged DaemonSet runs on all storage and GPU nodes, mounts the CIFS share into this pre-shared directory using `mount -t cifs`. App pods use a simple `hostPath: /mnt/decypharr-dfs` with `HostToContainer`. No sidecar. No privilege in app pods.
+### Option 10: DaemonSet + Kernel NFS Mount ← **CHOSEN AND WORKING** ✅
+**Approach**: A privileged DaemonSet runs on all storage and GPU nodes. It mounts the rclone NFS share into `/mnt/decypharr-dfs` using `mount -t nfs` (kernel NFS client). App pods use a simple `hostPath: /mnt/decypharr-dfs` with `HostToContainer`. No sidecar. No privilege in app pods. No node prep required.
 
-**Why this is correct:**
-1. The shared bind mount preparation explicitly fixes the peer group problem — `/mnt/decypharr-dfs` is in a `shared` peer group, not `rprivate`
-2. `mount -t cifs` in the DaemonSet propagates through the shared mount to the host namespace
+**Why this works:**
+1. containerd/kubelet places hostPath volumes in the host's `shared:1` peer group automatically — no `mount --make-shared` preparation needed
+2. `mount -t nfs` is a kernel VFS operation — it propagates through shared peer groups unlike FUSE
 3. App pods read from host namespace via `HostToContainer` — a read-only view that requires no capability
 4. One DaemonSet serves all app pods on the node — no per-pod sidecar duplication
 5. Works for w3/ClusterPlex cross-node — DaemonSet runs on w3, uses pod network namespace for CoreDNS resolution
+
+**Critical implementation details** (both required for correct operation):
+- Use `grep -q '/mnt/decypharr-dfs nfs' /proc/mounts` to check mount state — NOT `mountpoint -q` (which always returns true for the hostPath bind-mount itself)
+- Include `port=2049,mountport=2049,tcp,nolock` in mount options — rclone's NFS server has no portmapper; without these options `mount` hangs forever waiting for port 111
 
 See `docs/current/DFS_ARCHITECTURE_PLAN.md` for the full implementation specification.
 
@@ -170,23 +172,25 @@ See `docs/current/DFS_ARCHITECTURE_PLAN.md` for the full implementation specific
 | 2. Zurg + Unraid | None | Minimal | None | ✅ | ✅ | ❌ Zurg rejected |
 | 3. STRM files | None | None | None | ✅ | ❌ Limited | ❌ Plex compat |
 | 4. rclone CSI | N/A wrong problem | Complex | None | ✅ | ✅ | ❌ Wrong problem |
-| 6. hostPath Bidirectional | Yes | Low | None | ❌ w3 moot | ✅ | ❌ rprivate k3s |
+| 6. hostPath FUSE direct | Yes | Low | None | ❌ | ✅ | ❌ FUSE won't propagate |
 | 7/8. emptyDir sidecar | Yes | Medium | Sidecar per pod | ✅ | ✅ | ❌ FUSE no propagate |
-| 9a. NFS sidecar | Avoids via re-export | Medium | Sidecar per pod | ✅ | ✅ | ❌ go-nfs deadlock |
+| 9a. NFS sidecar (emptyDir) | Avoids via re-export | Medium | Sidecar per pod | ✅ | ✅ | ❌ emptyDir isolation |
 | 9b. SFTP/sshfs sidecar | Yes (still FUSE) | Medium | Sidecar per pod | ✅ | ✅ | ❌ sshfs is FUSE |
-| 9c. SMB sidecar | Avoids via re-export | Medium | Sidecar per pod | ✅ | ✅ | 🔵 Phase 1 (untested) |
-| **10. DaemonSet+CIFS** | Avoids via re-export | Low-Medium | None (hostPath) | ✅ | ✅ | ✅ **CHOSEN** |
+| 9c. SMB/CIFS | Avoids via re-export | Low-Medium | None (hostPath) | ✅ | ✅ | ❌ rclone v1.73.1 no serve smb |
+| **10. DaemonSet+NFS** | Avoids via re-export | Low-Medium | None (hostPath) | ✅ | ✅ | ✅ **WORKING** |
 
 ---
 
 ## Key Technical Insights
 
-1. **The NFS deadlock and the propagation problem are separate bugs.** The NFS sidecar approach was abandoned because `rclone serve nfs` (go-nfs) deadlocked — not because kernel NFS client propagation failed. These must not be conflated in future debugging.
+1. **SSHFS is FUSE.** Switching from NFS client to SFTP/sshfs did not escape the propagation problem. It recreated the same FUSE propagation issue with an additional network hop. Always verify whether a filesystem client is FUSE-based or kernel-based before choosing it.
 
-2. **SSHFS is FUSE.** Switching from NFS client to SFTP/sshfs did not escape the propagation problem. It recreated the same FUSE propagation issue with an additional network hop.
+2. **FUSE mounts don't propagate; kernel VFS mounts do.** `mount -t nfs`, `mount -t cifs`, `mount -t ext4` — kernel VFS. sshfs, s3fs, goofys — FUSE. Only kernel mounts propagate correctly through hostPath Bidirectional.
 
-3. **The Decypharr official Docker example shows `/mnt/:/mnt:rshared`.** This is why it works in Docker — the entire `/mnt` tree is mounted with shared propagation at the Docker level. K8s does not replicate this automatically.
+3. **containerd/kubelet handles peer group setup automatically for hostPath.** No `mount --make-shared` node preparation is needed. When kubelet creates a hostPath volume with `Bidirectional`, the directory is placed in the host's `shared:1` peer group automatically. The alleged k3s `/mnt` rprivate limitation was a misdiagnosis.
 
-4. **`mount --make-shared` on a specific directory is the correct K8s equivalent.** CSI drivers that propagate FUSE (like gcsfuse CSI) do exactly this preparation before exposing a hostPath volume for propagation.
+4. **`mountpoint -q` on a hostPath volume is always true.** The hostPath bind-mount itself is a mountpoint. Any script that uses `mountpoint -q` to decide whether to mount something on a hostPath will be a no-op forever. Use `grep /proc/mounts` to check for a specific filesystem type instead.
 
-5. **Kernel VFS mounts (NFS, CIFS) propagate; FUSE mounts do not (in practice).** Even though propagation is theoretically possible for FUSE via shared peer groups, the Kubernetes container runtime creates peer group configurations that prevent it from working in practice with emptyDir and standard hostPath.
+5. **rclone serve nfs has no portmapper.** Always include `port=2049,mountport=2049,tcp,nolock` when mounting. Without these, the Linux kernel NFS client hangs waiting for port 111 (rpcbind) to answer — which it never will.
+
+6. **The Decypharr official Docker example shows `/mnt/:/mnt:rshared`.** This is why it works in Docker — the entire `/mnt` tree is mounted with shared propagation at the Docker level. The equivalent in Kubernetes is a DaemonSet with a hostPath volume and Bidirectional propagation, which containerd handles correctly.

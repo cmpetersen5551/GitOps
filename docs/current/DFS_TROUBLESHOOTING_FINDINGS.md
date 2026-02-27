@@ -1,187 +1,134 @@
-# DFS Troubleshooting Findings & Architecture Pivot
+# DFS Troubleshooting Findings
 
-**Date**: 2026-02-26  
-**Status**: 🟡 Partially Resolved — Switching from Host Propagation to Direct NFS Mounts  
-**Issue**: Sonarr cannot access DFS files despite rclone NFS server running  
-**Root Cause**: k3s node mount propagation limitations with the DaemonSet intermediary approach  
+**Date**: 2026-02-26 (resolved 2026-02-27)  
+**Status**: ✅ RESOLVED — DaemonSet + hostPath approach working (commit `64f462b`)  
+**Issue**: DFS files not visible in Sonarr/Radarr despite NFS server running  
+**Root Cause**: Two bugs in the DaemonSet script — mount check always returned true, and missing NFS port options caused mount to hang  
 
 ---
 
-## Summary of Investigation
+## Summary
+
+The DaemonSet + hostPath + `HostToContainer` propagation architecture described in `DFS_ARCHITECTURE_PLAN.md` **is correct and works on k3s**. The failure was two bugs in the DaemonSet shell script; the architecture itself needed no changes.
+
+---
+
+## Investigation Timeline
 
 ### Phase 1: Sonarr 404 Error (✅ Fixed)
 - **Symptom**: `sonarr.homelab` returned "404 page not found"
 - **Root Cause**: Pod had a stale `dfs-mounter` sidecar from old architecture (SFTP mount)
 - **Fix**: Deleted pod to force recreation with clean StatefulSet spec
-- **Result**: Sonarr pod now runs with just sonarr container, responds with HTML UI ✅
+- **Result**: Sonarr running correctly
 
-### Phase 2: Empty DFS Mount (❌ Complex Issue)
+### Phase 2: Empty DFS Mount
 - **Symptom**: Sonarr's `/mnt/dfs` was completely empty
-- **Initial Suspect**: Missing configuration in decypharr
-  - Checked `config.json` — RealDebrid API key present, mount config correct
-  - Logs showed decypharr was working: "DFS FUSE ready"
-  - Discovery: decypharr's `/mnt/dfs` inside the pod HAS files! (3GB mkv verified)
-  
-- **Second Suspect**: NFS Export Chain
-  - `rclone serve nfs /mnt/dfs --addr 0.0.0.0:2049` is running ✅
-  - Service `decypharr-streaming-nfs.media.svc.cluster.local:2049` is accessible ✅
-  - Files ARE visible in NFS export via direct pod exec ✅
+- **Verified working**:
+  - `decypharr-streaming-0:/mnt/dfs` — FUSE mounted, 3GB mkv file confirmed ✅
+  - `rclone serve nfs` listening on port 2049 inside the pod ✅
+  - Service `decypharr-streaming-nfs.media.svc.cluster.local:2049` reachable from pods ✅
+- **Checked but dismissed too early**: DaemonSet pod was "Running" and "Healthy" ← the bug was here
 
-### Phase 3: DaemonSet Mount Propagation (❌ Not Working)
-- **Problem**: Files exist in:
-  1. `decypharr-streaming-0:/mnt/dfs` (FUSE) ✅
-  2. `decypharr-streaming-nfs.media.svc.cluster.local:/` (NFS) ✅
-  3. But `/mnt/decypharr-dfs` on nodes is empty ❌
+### Phase 3: DaemonSet Mount Never Happening
+- **Discovery**: The DaemonSet pod had `/dev/sda1 ext4` at `/mnt/decypharr-dfs` in its `/proc/mounts`
+  - This was leftover from early CIFS mount attempts that created an ext4 artifact
+  - The pod's mount check (`mountpoint -q`) reported TRUE because of this ext4 artifact
+  - **NFS was never attempted** — the script's pre-check falsely indicated "already mounted"
+- **Confirmed via live inspection**:
+  ```bash
+  kubectl exec -n media dfs-mounter-<pod> -- cat /proc/mounts | grep decypharr
+  # Output: /dev/sda1 /mnt/decypharr-dfs ext4 ...
+  # (no NFS entry — NFS was never mounted)
+  ```
 
-- **Discovery #1**: ext4 Device Blocking
-  - Found `/dev/sda1` or `/dev/vda2` mounted at `/mnt/decypharr-dfs` on all nodes
-  - This is Longhorn storage from previous attempts, not from fstab or explicit config
-  - Likely from old CIFS mount attempts that left artifacts
-  - **Fix**: Unmounted `/dev/sda1` from `/mnt/decypharr-dfs`
-  - **Issue**: Device keeps remounting when DaemonSetpod restarts — causes continuous blocking
-
-- **Discovery #2**: Mount Propagation Failing
-  - Even after removing blocking ext4 device, NFS mount doesn't appear in DaemonSet pod's `/mnt/decypharr-dfs`
-  - Checked `/proc/mounts` inside pod: only sees old ext4, not the NFS we're trying to mount
-  - The DaemonSet script runs `mount -t nfs ... decypharr-streaming-nfs.media.svc.cluster.local:/ /mnt/decypharr-dfs`
-  - Mount command appears to succeed but files aren't accessible from the mountpoint
-  - This aligns with known k3s limitation: `/mnt` on k3s root filesystem is in `rprivate` peer group
-  - **Impact**: Bidirectional hostPath propagation cannot cross private peer group boundary
-
-- **Discovery #3**: Why Apps Can't See Mount
-  - Sonarr uses `hostPath: /mnt/decypharr-dfs` with `mountPropagation: HostToContainer`
-  - Since the DaemonSet mount never properly establishes or doesn't propagate to host, Sonarr sees empty dir
-  - The _intended_ chain: DFS FUSE → rclone NFS → DaemonSet kernel mount → hostPath → app pods
-  - **Actual result**: DFS FUSE → rclone NFS → (breaks here) ❌
-
----
-
-## Root Cause Analysis
-
-The DaemonSet + hostPath + mount propagation approach documented in `DFS_ARCHITECTURE_PLAN.md` has **one critical flaw on k3s**:
-
-1. **k3s root filesystem isolation**: The `/mnt` directory lives on k3s's root filesystem, which is mounted as `rprivate` (private peer group)
-2. **Bidirectional propagation limitation**: Even with `mountPropagation: Bidirectional`, a mount made inside a `rprivate` peer group cannot propagate back to the host
-3. **Result**: DaemonSet successfully mounts NFS in its pod namespace, but the mount never appears in the host's `/mnt` tree
-4. **Consequence**: All hostPath-based apps see an empty `/mnt/decypharr-dfs` directory
-
-**The document `DFS_RESEARCH_AND_OPTIONS.md` (section "hostPath + Bidirectional on k3s") mentioned this exact limitation but indicated we had worked around it with "shared bind mount prep on the node." However, that workaround isn't functioning.**
+### Phase 4: Testing the Fix
+- **Manual NFS mount with original options (hangs)**:
+  ```bash
+  mount -t nfs -o vers=3,soft,timeo=10 decypharr-streaming-nfs...:/ /mnt/decypharr-dfs
+  # Result: TIMEOUT — hangs waiting for portmapper (port 111)
+  ```
+- **Manual NFS mount with correct port options (succeeds)**:
+  ```bash
+  mount -t nfs -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=3,retrans=1 \
+    decypharr-streaming-nfs...:/ /mnt/decypharr-dfs
+  # Result: SUCCESS — mounted in ~1 second
+  ```
+- **Host propagation verified immediately**:
+  ```bash
+  ssh root@k3s-w1 "ls /mnt/decypharr-dfs/"
+  # Output: __all__  __bad__  nzbs  torrents  version.txt ✅
+  ```
+- **Sonarr access verified end-to-end**:
+  ```bash
+  kubectl exec -n media sonarr-0 -- ls /mnt/dfs/
+  # Output: __all__  __bad__  nzbs  torrents  version.txt ✅
+  ```
 
 ---
 
-## Changes Made
+## Root Cause: Two Bugs in the DaemonSet Script
 
-### 1. Removed DaemonSet Intermediary (Architecture Pivot)
-Instead of:
-```
-decypharr (FUSE) → rclone NFS → DaemonSet kernel mount → hostPath → Sonarr/Radarr
-```
+### Bug 1: `mountpoint -q` false-positive (NFS never attempted)
 
-Changed to:
-```
-decypharr (FUSE) → rclone NFS → [direct Kubernetes NFS volume] → Sonarr/Radarr
+The script checked `mountpoint -q /mnt/decypharr-dfs` to decide whether to run the NFS mount.
+
+A Kubernetes `hostPath` volume bind-mounts the host directory into the container. This bind-mount **is itself a mountpoint** from the kernel's perspective. So `mountpoint -q /mnt/decypharr-dfs` always returns true — regardless of whether NFS is mounted there or not.
+
+**Effect**: The "mount if not mounted" branch was never reached. NFS was never attempted on any pod start or loop iteration since the DaemonSet was first deployed.
+
+**Fix**: Check specifically for an NFS filesystem type in `/proc/mounts`:
+```bash
+# BEFORE (always true — checks if anything is at that path):
+if ! mountpoint -q /mnt/decypharr-dfs; then mount ...; fi
+
+# AFTER (correctly checks for NFS specifically):
+if ! grep -q '/mnt/decypharr-dfs nfs' /proc/mounts; then mount ...; fi
 ```
 
-### 2. Updated StatefulSet Manifests
-**Sonarr** (`clusters/homelab/apps/media/sonarr/statefulset.yaml`):
-```yaml
-# Before:
-- name: dfs
-  hostPath:
-    path: /mnt/decypharr-dfs
-    type: Directory
+### Bug 2: Missing `port=2049,mountport=2049,tcp,nolock` options (mount hangs)
 
-# After:
-- name: dfs
-  nfs:
-    server: decypharr-streaming-nfs.media.svc.cluster.local
-    path: /
-    readOnly: true
+`rclone serve nfs` does **not** run a portmapper (rpcbind) daemon. The Linux kernel NFS client contacts portmapper (port 111) by default to discover which port the NFS server is using.
+
+Without explicit port options, `mount -t nfs` sends a portmapper RPC to port 111, gets no response, and hangs until a hard timeout fires — preventing the mount script loop from completing.
+
+**Fix**: Explicitly specify all ports and disable locking:
+```
+vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=10,retrans=3,rsize=32768,wsize=32768
 ```
 
-**Radarr** (`clusters/homelab/apps/media/radarr/statefulset.yaml`):
-- Same change applied
-
-### 3. Rationale for Direct NFS Approach
-- **Simpler**: Eliminates the DaemonSet intermediary that was adding complexity without benefit
-- **Works on k3s**: Kubernetes NFS volumes are standard, well-tested, no mount propagation gymnastics
-- **Still reliable**: If decypharr-streaming pod fails over to another node, the NFS service automatically reroutes
-- **No node setup**: No need for root-level shared mount point prep
-- **Fewer moving parts**: One less pod type to monitor and troubleshoot
+- `port=2049,mountport=2049`: bypass portmapper entirely, contact NFS server directly
+- `tcp`: force TCP transport (rclone's NFS server uses TCP)
+- `nolock`: disable NLM file locking (rclone's go-nfs doesn't implement NLM)
 
 ---
 
-## What Still Works
+## What Earlier Analysis Got Wrong
 
-✅ **decypharr-streaming**:
-- FUSE mount `/mnt/dfs` is functional and populated
-- Contains actual RealDebrid content (`Too Hot to Handle S06E01` 3GB mkv file verified)
-- rclone NFS server listening on port 2049
-- rclone serving the FUSE directory correctly
+Several conclusions written during debugging turned out to be incorrect:
 
-✅ **Kubernetes NFS Service**:
-- `decypharr-streaming-nfs.media.svc.cluster.local:2049` is accessible
-- rclone outputs NFS correctly
+| Earlier Claim | Actual Truth |
+|---|---|
+| "k3s's rprivate peer group prevents Bidirectional hostPath propagation" | FALSE. containerd places hostPath volumes in the host's `shared:1` peer group. Propagation works without any node prep. |
+| "DaemonSet approach does not work reliably on this k3s setup" | FALSE. Two script bugs were the only problem. Architecture is sound. |
+| "go-nfs deadlocks when backed by FUSE" | NOT CONFIRMED in DaemonSet context. May have occurred with in-pod emptyDir sidecar, but the NFS server was responsive and healthy throughout the DaemonSet investigation. |
+| "Should pivot to direct Kubernetes NFS volumes in Sonarr/Radarr" | WRONG. Unnecessary. DaemonSet approach works and is preferable (works for w3/ClusterPlex cross-node; avoids kubelet-level NFS limitations). |
 
-✅ **Sonarr/Radarr Pods**:
-- Running and healthy
-- Ready to mount NFS volumes
+**Note on the "pivot" commit**: Commit `6b633a6` documented a pivot to direct NFS volumes in the StatefulSets, but that change was **documentation only — it was never applied to the YAML manifests**. Sonarr and Radarr continued using `hostPath` throughout. This was fortunate, as the hostPath approach is correct.
 
 ---
 
-## What Didn't Work
+## Propagation: Why hostPath Works on k3s Without Node Prep
 
-❌ **DaemonSet + hostPath Mount Propagation**:
-- k3s mount namespace prevents the shared propagation workaround from functioning
-- `/dev/sda1` ext4 mounts keep appearing at `/mnt/decypharr-dfs` (legacy artifact, needs cleanup)
-- Bidirectional hostPath cannot cross k3s's rprivate peer group boundary
-- **Conclusion**: The workaround documented in Phase 1 of `DFS_ARCHITECTURE_PLAN.md` does not work reliably on this k3s setup
+The earlier theory that k3s's root filesystem being `rprivate` prevents hostPath propagation was tested and disproved.
 
----
+When kubelet creates a `hostPath` volume with `mountPropagation: Bidirectional`, containerd bind-mounts the host directory into the container using the host's existing peer group. The `/mnt/decypharr-dfs` directory on the host participates in the root filesystem peer group `shared:1`. A kernel VFS mount (NFS) made inside the container at that path propagates through `shared:1` back to the host namespace.
 
-## Next Steps
-
-1. **Apply changes and verify access**:
-   - Commit the Sonarr/Radarr NFS volume changes
-   - Force Flux reconciliation to apply updates
-   - Delete/recreate Sonarr/Radarr pods to mount NFS directly
-   - Verify files appear in `/mnt/dfs` from inside pods
-
-2. **Optional: Retire DaemonSet** (if direct NFS approach succeeds):
-   - Remove `dfs-mounter` DaemonSet since it's no longer needed
-   - Remove node prep step from `LONGHORN_NODE_SETUP.md`
-   - Update architecture documentation to reflect simpler direct-NFS approach
-
-3. **Clean up ext4 artifacts**:
-   - Remove `/dev/sda1` references on all nodes
-   - Investigate why ext4 mounts keep reappearing
-
-4. **Validate HA behavior**:
-   - Test decypharr-streaming failover from w1 → w2
-   - Verify Sonarr/Radarr pods can still access files after failover (NFS service should redirect)
+The earlier confusion came from interpreting `cat /proc/self/mountinfo | grep ' /mnt '` returning nothing as "the `/mnt` tree cannot propagate." The correct interpretation is just that `/mnt` is not its own separate mount — it's part of the root filesystem, which **is** in `shared:1`.
 
 ---
 
-## Lessons Learned
+## Files Changed to Resolve
 
-1. **Mount propagation is fragile in Kubernetes**: Different container runtimes and node configurations behave differently
-2. **k3s has peculiar mount isolation**: Unlike standard Kubernetes clusters, k3s's rprivate root FS prevents certain workarounds
-3. **Direct Kubernetes volumes are simpler**: When available, let Kubernetes manage the volume lifecycle rather than fighting mount namespaces
-4. **DaemonSets are heavy for simple tasks**: The complexity cost (monitoring, debugging, node prep) outweighed the benefit compared to built-in NFS volumes
-5. **Always test propagation assumptions**: Theoretical mount propagation and actual behavior can differ significantly
+- `clusters/homelab/infrastructure/dfs-mounter/daemonset.yaml` — Fixed two bugs in mount loop script (commit `64f462b`)
 
----
-
-## Files Changed
-
-- `clusters/homelab/apps/media/sonarr/statefulset.yaml` — Changed dfs volume from hostPath to NFS
-- `clusters/homelab/apps/media/radarr/statefulset.yaml` — Changed dfs volume from hostPath to NFS
-- (No DaemonSet changes yet — waiting to verify direct NFS works before removing it)
-
----
-
-## References
-
-- **Previous Analysis**: `docs/DFS_RESEARCH_AND_OPTIONS.md` — Section "hostPath + Bidirectional on k3s" (correctly identified the limitation)
-- **Original Plan**: `docs/current/DFS_ARCHITECTURE_PLAN.md` — DaemonSet approach (no longer applicable)
-- **Kubernetes NFS Volume Docs**: https://kubernetes.io/docs/concepts/storage/volumes/#nfs
+No other changes were needed. Sonarr, Radarr, and decypharr-streaming StatefulSets were already correct.
