@@ -103,4 +103,4 @@ spec:
         - name: dfs-host
           hostPath:
             path: /mnt/decypharr-dfs
-            type: Directory    # Must pre-exist as shared bind mount on nodes (see node prep)
+            type: DirectoryOrCreate    # Created automatically if not present on the node
