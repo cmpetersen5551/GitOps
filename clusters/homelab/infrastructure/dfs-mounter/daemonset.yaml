@@ -75,7 +75,7 @@ spec:
                 if ! grep -q '/mnt/decypharr-dfs nfs' /proc/mounts 2>/dev/null; then
                   echo "Mounting DFS via NFS..."
                   mount -t nfs \
-                    -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=10,retrans=3,rsize=32768,wsize=32768 \
+                    -o vers=3,port=2049,mountport=2049,tcp,nolock,soft,timeo=10,retrans=3,rsize=32768,wsize=32768,actimeo=1 \
                     decypharr-streaming-nfs.media.svc.cluster.local:/ \
                     /mnt/decypharr-dfs \
                     && echo "DFS mounted" || echo "Mount failed, retrying in 15s..."

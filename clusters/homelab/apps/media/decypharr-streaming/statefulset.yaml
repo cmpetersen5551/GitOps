@@ -94,7 +94,7 @@ spec:
               done
               echo "DFS FUSE ready — starting rclone NFS server on :2049"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                rclone serve nfs /mnt/dfs --addr 0.0.0.0:2049 --vfs-cache-mode=off || true
+                rclone serve nfs /mnt/dfs --addr 0.0.0.0:2049 --vfs-cache-mode=off --dir-cache-time=5s || true
                 sleep 5
               done
           securityContext:
