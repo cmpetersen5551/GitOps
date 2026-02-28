@@ -87,8 +87,45 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              apk add --no-cache samba --quiet
+              apk add --no-cache samba gcc musl-dev --quiet
               mkdir -p /mnt/dfs /var/lib/samba /var/log/samba /run/samba
+
+              # Fix: Samba 4.x treats st_nlink==0 as a deleted file and returns
+              # NT_STATUS_OBJECT_NAME_NOT_FOUND. decypharr's FUSE directories
+              # report st_nlink=0 (hanwen/go-fuse default). This LD_PRELOAD shim
+              # sets st_nlink=2 for any directory where nlink==0.
+              cat > /tmp/fix_nlink.c << 'CEOF'
+              #define _GNU_SOURCE
+              #include <sys/stat.h>
+              #include <stddef.h>
+              #include <dlfcn.h>
+              static void fix(struct stat *s) {
+                  if (s && S_ISDIR(s->st_mode) && s->st_nlink == 0) s->st_nlink = 2;
+              }
+              int fstat(int d, struct stat *s) {
+                  static int (*real)(int, struct stat *) = NULL;
+                  if (!real) real = dlsym(RTLD_NEXT, "fstat");
+                  int r = real(d, s); if (!r) fix(s); return r;
+              }
+              int lstat(const char *p, struct stat *s) {
+                  static int (*real)(const char *, struct stat *) = NULL;
+                  if (!real) real = dlsym(RTLD_NEXT, "lstat");
+                  int r = real(p, s); if (!r) fix(s); return r;
+              }
+              int stat(const char *p, struct stat *s) {
+                  static int (*real)(const char *, struct stat *) = NULL;
+                  if (!real) real = dlsym(RTLD_NEXT, "stat");
+                  int r = real(p, s); if (!r) fix(s); return r;
+              }
+              int fstatat(int d, const char *p, struct stat *s, int fl) {
+                  static int (*real)(int, const char *, struct stat *, int) = NULL;
+                  if (!real) real = dlsym(RTLD_NEXT, "fstatat");
+                  int r = real(d, p, s, fl); if (!r) fix(s); return r;
+              }
+              CEOF
+              gcc -shared -fPIC -o /tmp/fix_nlink.so /tmp/fix_nlink.c -ldl -O2
+              echo "fix_nlink.so compiled OK"
+
               cat > /etc/samba/smb.conf << 'SMBCONF'
               [global]
                 workgroup = WORKGROUP
@@ -119,7 +156,7 @@ spec:
               done
               echo "DFS FUSE ready — starting smbd on :445"
               while kill -0 $DECYPHARR_PID 2>/dev/null; do
-                smbd --foreground --no-process-group --debuglevel=1 2>&1 || true
+                LD_PRELOAD=/tmp/fix_nlink.so smbd --foreground --no-process-group --debuglevel=1 2>&1 || true
                 sleep 5
               done
           securityContext:
