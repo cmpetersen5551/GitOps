@@ -90,17 +90,20 @@ spec:
               apk add --no-cache samba gcc musl-dev --quiet
               mkdir -p /mnt/dfs /var/lib/samba /var/log/samba /run/samba
 
-              # Fix: Samba 4.x treats st_nlink==0 as a deleted file and returns
-              # NT_STATUS_OBJECT_NAME_NOT_FOUND. decypharr's FUSE directories
-              # report st_nlink=0 (hanwen/go-fuse default). This LD_PRELOAD shim
-              # sets st_nlink=2 for any directory where nlink==0.
+              # Fix: Samba 4.x treats st_nlink==0 as a deleted/unlinked inode and returns
+              # NT_STATUS_OBJECT_NAME_NOT_FOUND for both files and directories.
+              # decypharr's FUSE (hanwen/go-fuse) reports st_nlink=0 for all entries.
+              # This LD_PRELOAD shim sets st_nlink=2 for dirs and st_nlink=1 for files.
               cat > /tmp/fix_nlink.c << 'CEOF'
               #define _GNU_SOURCE
               #include <sys/stat.h>
               #include <stddef.h>
               #include <dlfcn.h>
               static void fix(struct stat *s) {
-                  if (s && S_ISDIR(s->st_mode) && s->st_nlink == 0) s->st_nlink = 2;
+                  if (s && s->st_nlink == 0) {
+                      if (S_ISDIR(s->st_mode)) s->st_nlink = 2;
+                      else s->st_nlink = 1;
+                  }
               }
               int fstat(int d, struct stat *s) {
                   static int (*real)(int, struct stat *) = NULL;
