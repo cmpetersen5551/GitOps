@@ -12,11 +12,6 @@ spec:
   selector:
     matchLabels:
       app: decypharr-streaming
-  # Use OnDelete to prevent automatic restarts during updates
-  updateStrategy:
-    type: OnDelete
-  # Ordered pod management
-  podManagementPolicy: OrderedReady
   # PVC template for config storage
   volumeClaimTemplates:
     - metadata:
@@ -40,9 +35,6 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      # Disable Kubernetes service links to prevent auto-injection of DECYPHARR_PORT env var
-      # The new blackhole:beta image incorrectly parses the tcp://IP:PORT format
-      enableServiceLinks: false
       # Decypharr: FUSE-based DFS filesystem exposed to host via Bidirectional
       # hostPath mount propagation. Consumers receive the mount automatically
       # via HostToContainer (MS_SLAVE) — no SMB/CIFS layer needed.
@@ -66,7 +58,7 @@ spec:
             - name: PGID
               value: "1000"
             - name: TZ
-              value: "UTC"
+              value: "America/Chicago"
             - name: LOG_LEVEL
               value: "INFO"
           resources:

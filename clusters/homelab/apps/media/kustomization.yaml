@@ -15,4 +15,10 @@ patches:
   - path: patches/ha-affinity.yaml
     target:
       kind: StatefulSet
+  - path: patches/statefulset-strategy.yaml
+    target:
+      kind: StatefulSet
+  - path: patches/disable-service-links.yaml
+    target:
+      kind: StatefulSet
 

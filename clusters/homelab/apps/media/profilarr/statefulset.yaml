@@ -12,11 +12,6 @@ spec:
   selector:
     matchLabels:
       app: profilarr
-  # Use OnDelete to prevent automatic restarts during updates
-  updateStrategy:
-    type: OnDelete
-  # Ordered pod management (wait for ready before starting next)
-  podManagementPolicy: OrderedReady
   template:
     metadata:
       labels:
@@ -31,7 +26,7 @@ spec:
               name: http
           env:
             - name: TZ
-              value: "UTC"
+              value: "America/Chicago"
             - name: PROFILARR_PORT
               value: "6868"
           resources:
