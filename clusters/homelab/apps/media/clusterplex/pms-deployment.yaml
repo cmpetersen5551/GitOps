@@ -100,7 +100,7 @@ spec:
           startupProbe:
             httpGet:
               path: /identity
-              scheme: HTTPS
+              scheme: HTTP
               port: 32400
             initialDelaySeconds: 0
             periodSeconds: 10
@@ -109,7 +109,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /identity
-              scheme: HTTPS
+              scheme: HTTP
               port: 32400
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -118,7 +118,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /identity
-              scheme: HTTPS
+              scheme: HTTP
               port: 32400
             initialDelaySeconds: 10
             periodSeconds: 10
