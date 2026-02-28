@@ -195,42 +195,21 @@ Correct values are `http` and `https` matching Traefik's internal entrypoint nam
   - Pod anti-affinity: avoid other workers (spread across w3 topology), soft preference away from PMS
   - **GPU acceleration enabled** via gpu=true node label
 
-- **NFS Export**: Configured on w1/w2 host directly (not containerized)
-  - `/mnt/dfs` exported via NFS on port 2049 (read-only, no_root_squash for k8s mount)
-  - Workers on w3 mount via k8s NFS PV pointing to w1's host IP (192.168.1.12)
-
-**Host Setup (Required)**:
-Run on w1 HOST (one-time, before PMS deployment):
-```bash
-apt-get update && apt-get install -y nfs-kernel-server
-echo "/mnt/dfs 10.0.0.0/8(ro,sync,no_subtree_check,no_root_squash)" >> /etc/exports
-exportfs -ra
-systemctl restart nfs-kernel-server
-```
+- **NFS Server Pod**: `erichough/nfs-server` Deployment, scheduled on w1/w2 (storage affinity + prefer primary)
+  - Mounts host's `/mnt/dfs` (FUSE) via hostPath with `mountPropagation: HostToContainer` — this was the root cause of all previous failures (missing propagation = empty dir = no valid exports)
+  - Exports `/export/dfs` read-only over NFS to cluster
+  - Service ClusterIP pinned at `10.43.160.244` — stable across pod restarts, kube-proxy routes to wherever pod runs
+  - NFS PV points to ClusterIP `10.43.160.244` (not a host IP) — provides automatic HA: pod fails over to w2 → ClusterIP routes there
 
 **Streaming Transcoding HA**:
-- Normal (w1 alive): decypharr-streaming on w1 → `/mnt/dfs` FUSE on w1 host → w1 exports via NFS → Workers mount via NFS PVC
-- w1 fails: decypharr-streaming + PMS reschedule to w2 → decypharr creates `/mnt/dfs` on w2 host → w1 NFS export stops
-- **Manual failover step** (if w1 fails and stays down):
-  1. On w2 host, run:
-     ```bash
-     apt-get install -y nfs-kernel-server  # if not already installed
-     echo "/mnt/dfs 10.0.0.0/8(ro,sync,no_subtree_check,no_root_squash)" >> /etc/exports
-     exportfs -ra
-     systemctl restart nfs-kernel-server
-     ```
-  2. Patch NFS PV to point to w2 IP:
-     ```bash
-     kubectl patch pv clusterplex-dfs-nfs-pv -p '{"spec":{"nfs":{"server":"192.168.1.22"}}}'
-     ```
-  3. Workers on w3 will remount NFS and resume transcoding (soft mount options handle failover gracefully)
-- w1 recovers: descheduler evicts pods after ~5min → PMS + decypharr failback to w1
-  - Re-enable NFS export on w1 host, patch PV back to w1 IP
+- Normal (w1 alive): decypharr-streaming on w1 → FUSE at `/mnt/dfs` on w1 host → NFS server pod on w1 sees it via HostToContainer propagation → exports it → Workers on w3 mount via ClusterIP NFS PVC
+- w1 fails: descheduler evicts → decypharr-streaming + NFS server pod reschedule to w2 → decypharr creates `/mnt/dfs` FUSE on w2 host → NFS server pod picks it up via HostToContainer → same ClusterIP routes to w2 pod → Workers resume automatically (~60s)
+- w1 recovers: descheduler evicts pods from w2 after ~5min → PMS + decypharr + NFS server failback to w1 automatically
 
 **Rejected Alternatives**:
-- NFS server container (erichough, kvaps, siomiz, etc.) — Docker images unavailable/broken, k8s hostPath/mount propagation complex
+- Host-level `nfs-kernel-server` — requires manual SSH runbook on every failover, not GitOps-managed
 - SMB/Samba sidecar — previously rejected; do not re-add
-- Direct hostPath from w3 — `/mnt/dfs` only exists on w1 during normal operation
+- Direct hostPath from w3 — `/mnt/dfs` FUSE only exists on whichever node runs decypharr-streaming
 
 **Important Notes**:
 - Local Relay (NGINX proxy in PMS) is enabled by default (`LOCAL_RELAY_ENABLED=1`) — workers talk to relay at port 32499, not directly to PMS

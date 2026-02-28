@@ -149,3 +149,15 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 ### Pod not returning to w1 after w1 recovery
 - **Cause**: Descheduler not running, or pod doesn't have `preferredDuringScheduling` affinity for w1
 - **Fix**: Verify descheduler CronJob is running (`kubectl get cronjob -n kube-system descheduler`); confirm pod spec has `preferredDuringScheduling` for `node.longhorn.io/primary=true`
+
+---
+
+## ClusterPlex / NFS-server pod
+
+### NFS server pod reports "no valid exports" / fails to export
+- **Cause**: `mountPropagation` was missing on the hostPath volumeMount. Without `HostToContainer`, the FUSE mount at `/mnt/dfs` created by decypharr-streaming is invisible inside the NFS server pod — it sees an empty directory, so `exportfs` finds nothing to export.
+- **Fix**: Set `mountPropagation: HostToContainer` on the hostPath volumeMount for `/mnt/dfs`/`/export/dfs` inside the NFS server pod. The image choice is irrelevant — this will fail with any image if propagation is wrong.
+
+### NFS PV needs a stable server address but pod IP changes
+- **Cause**: NFS PVs are mounted at the kubelet (node) level, so they can't use in-cluster DNS (`*.svc.cluster.local`). Pod IPs change on every restart.
+- **Fix**: Pin the service `spec.clusterIP` in the Service manifest and use that IP in the PV's `nfs.server` field. kube-proxy's iptables rules on each node forward ClusterIP traffic to the current pod IP, providing transparent HA routing.

@@ -17,8 +17,6 @@ spec:
         app.kubernetes.io/name: clusterplex-nfs-server
         app.kubernetes.io/part-of: clusterplex
     spec:
-      securityContext:
-        fsGroup: 65534  # NFS nobdy user
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -49,15 +47,14 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: nfs-server
-          image: d2fong/docker-nfs-server:latest
+          image: erichough/nfs-server:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
             capabilities:
               add:
                 - SYS_ADMIN
-                - SYS_RESOURCE
-                - NET_ADMIN
+                - SETPCAP
           ports:
             - name: nfs
               containerPort: 2049
@@ -69,14 +66,12 @@ spec:
               containerPort: 111
               protocol: TCP
           env:
-            - name: NFS_SERVER
-              value: "true"
             - name: NFS_EXPORT_0
-              value: /export/dfs *(ro,sync,no_subtree_check,no_root_squash)
+              value: "/export/dfs *(ro,sync,no_subtree_check,no_root_squash)"
           volumeMounts:
             - name: dfs
               mountPath: /export/dfs
-              readOnly: true
+              mountPropagation: HostToContainer
           resources:
             requests:
               cpu: 100m
@@ -85,12 +80,9 @@ spec:
               cpu: 500m
               memory: 512Mi
           livenessProbe:
-            exec:
-              command:
-                - test
-                - -f
-                - /export/dfs
-            initialDelaySeconds: 10
+            tcpSocket:
+              port: 2049
+            initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

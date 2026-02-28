@@ -12,8 +12,8 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   nfs:
-    server: 192.168.1.12  # w1 host IP - will export /mnt/dfs directly from host
-    path: /mnt/dfs
+    server: 10.43.160.244  # ClusterIP of clusterplex-nfs-server svc — routes to wherever pod runs (HA)
+    path: /export/dfs
   mountOptions:
     - noac           # Disable attribute caching (prevents staleness)
     - soft           # Fail fast if NFS server unreachable

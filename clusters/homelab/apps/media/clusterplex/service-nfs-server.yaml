@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: clusterplex
 spec:
   type: ClusterIP
+  clusterIP: 10.43.160.244  # Pinned so PV can reference a stable IP
   ports:
     - name: nfs
       port: 2049
