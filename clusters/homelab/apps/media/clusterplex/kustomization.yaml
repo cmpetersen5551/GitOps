@@ -1,8 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-metadata:
-  name: clusterplex
-  namespace: media
 
 resources:
   # ConfigMaps
@@ -16,9 +13,10 @@ resources:
   - pv-dfs-nfs.yaml
   - pvc-dfs-nfs.yaml
   
-  # NFS Server (exports /mnt/dfs from host)
-  - service-nfs-server.yaml
-  - nfs-server-deployment.yaml
+  # NFS Server (exports /mnt/dfs from w1/w2 host directly, not via container)
+  # - service-nfs-server.yaml
+  # - nfs-server-deployment.yaml
+  # TODO: Find working NFS server docker image or use host-level nfs-kernel-server
   
   # Plex Media Server
   - service-pms.yaml
@@ -28,7 +26,7 @@ resources:
   - service-orchestrator.yaml
   - orchestrator-deployment.yaml
   
-  # Workers
+  # Workers (scheduled on w3 GPU node)
   - service-worker.yaml
   - worker-statefulset.yaml
   

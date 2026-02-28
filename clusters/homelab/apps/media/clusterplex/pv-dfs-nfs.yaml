@@ -7,13 +7,13 @@ metadata:
     app.kubernetes.io/part-of: clusterplex
 spec:
   capacity:
-    storage: 100Gi  # Arbitrary; NFS doesn't enforce quotas at PV level
+    storage: 100Gi
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   nfs:
-    server: clusterplex-nfs-server  # Service DNS name (ClusterIP resolves to NFS pod)
-    path: /export/dfs
+    server: 192.168.1.12  # w1 host IP - will export /mnt/dfs directly from host
+    path: /mnt/dfs
   mountOptions:
     - noac           # Disable attribute caching (prevents staleness)
     - soft           # Fail fast if NFS server unreachable
