@@ -1,39 +1,58 @@
 # Decypharr Deployment Notes
 
-**Date**: 2026-02-24 (Updated)  
-**Status**: ✅ DEPLOYED - Two separate instances (streaming + download)
+**Date**: 2026-02-24 (Updated 2026-02-28)  
+**Status**: ✅ DEPLOYED - Two separate instances (streaming + download)  
+**Last Change**: SMB/CIFS migration (2026-02-26) with Samba/FUSE nlink fix (2026-02-28)
 
-## Architecture Overview
+## Current Architecture (2026-02-28): SMB/CIFS Export
 
 **Dual Decypharr Architecture**: Separate StatefulSets for streaming (RealDebrid) and download (Usenet/Torrent):
 
-1. **Decypharr-Streaming**: RealDebrid/Alldebrid provider
-   - Container: decypharr (FUSE client for DFS mount)
-   - Sidecar: rclone-nfs-server (exposes DFS as NFS for Sonarr/Radarr/Plex)
-   - Storage: DFS cache (emptyDir), streaming-media (RWX PVC)
-   - Status: ✅ Running 2/2 on k3s-w1
+1. **Decypharr-Streaming**: RealDebrid/Alldebrid provider → SMB Server
+   - Container: decypharr (FUSE DFS mounted at `/mnt/dfs`) + smbd (Samba 4.22.8 on port 445)
+   - Exports: `/mnt/dfs` as read-only SMB share `dfs`
+   - Storage: config (Longhorn RWO), streaming-media (Longhorn RWX), dfs (hostPath `ext4`)
+   - Status: ✅ Running 1/1 on k3s-w1
+   - Network: ClusterIP service `decypharr-streaming-smb.media.svc.cluster.local:445`
 
-2. **Decypharr-Download**: Usenet/Torrent provider
-   - Container: decypharr (Usenet/Torrent configuration)
-   - Storage: Unraid media mount (read-only)
+2. **DFS Mounter**: DaemonSet (all nodes)
+   - Mounts SMB share via CIFS kernel client: `mount -t cifs //10.43.244.160/dfs /mnt/decypharr-dfs`
+   - Propagates mount to host via hostPath: `/mnt/decypharr-dfs` → `/mnt/decypharr-dfs` (shared)
+   - Uses `nsenter` to run mount in host network namespace
+   - Runs on all nodes for HA (w1, w2, w3)
+
+3. **Consumer Apps** (Sonarr, Radarr, Prowlarr, etc.)
+   - Bind-mount: host's `/mnt/decypharr-dfs` → pod's `/mnt/dfs` (CIFS mount, read-only)
+   - Create symlinks: `/mnt/streaming-media/downloads/$app/file.mkv → /mnt/dfs/__all__/.../file.mkv`
+   - Sonarr/Radarr: Import episodes via symlinks and managed DFS path
+
+4. **Decypharr-Download**: Usenet/Torrent provider
+   - Container: decypharr (download-only config)
+   - Storage: Unraid NFS mount (read-only for media library)
    - Status: ✅ Running 1/1 on k3s-w1
 
-## Streaming Instance Overview (Primary for RealDebrid)
+## Migration from NFS (2026-02-26)
 
-Decypharr-Streaming is deployed as a StatefulSet with two containers:
-1. **decypharr**: Main application (DFS FUSE mount + symlink management)
-2. **rclone-nfs-server**: Sidecar exposing DFS cache as NFS for remote access (Sonarr, Radarr, ClusterPlex workers)
+**Why**:
+- NFS requires IP-based service discovery (MetalLB/BGP), port 111 (portmapper) on all nodes
+- SMB/CIFS is simpler: single port (445), in-process on decypharr pod
+- CIFS is more resilient with automatic reconnect and fault tolerance
+
+**Changes**:
+- ❌ Removed: rclone-nfs-server sidecar, NFS service, NFS mounts on dfs-mounter
+- ✅ Added: smbd in decypharr-streaming container, CIFS mount in dfs-mounter, nsenter kernel netns entry
+- ✅ Added: LD_PRELOAD nlink shim (fixes Samba 4.x inode deletion bug)
 
 ## Deployment Summary
 
 - **Image**: `cy01/blackhole:latest` (official Docker Hub image)
-- **Port**: 8282 (web UI + API)
-- **NFS Export**: Port 2049 (rclone sidecar)
+- **Decypharr Port**: 8282 (web UI + API)
+- **Samba Port**: 445 (SMB/CIFS server)
 - **Storage**:
   - Config: `config-decypharr-0` (10Gi Longhorn RWO)
-  - Streaming Media: `pvc-streaming-media` (1Gi Longhorn RWX - for symlinks)
-  - DFS Cache: `emptyDir: {medium: Memory}` (tmpfs, ephemeral — required for FUSE mount propagation)
-- **Node Affinity**: Requires storage nodes (w1/w2), prefers w1
+  - Streaming Media: `pvc-streaming-media` (1Gi Longhorn RWX - for symlinks/imports)
+  - DFS FUSE: hostPath `/mnt/decypharr-dfs` (kernel mount device, auto-created by dfs-mounter)
+- **Node Affinity**: Decypharr requires storage nodes (w1/w2), prefers w1
 - **Tolerations**: `node.longhorn.io/storage=enabled:NoSchedule`
 
 ## Critical Fix Applied (2026-02-18): Longhorn RWX Volume Scheduling
