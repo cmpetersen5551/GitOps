@@ -69,8 +69,8 @@ spec:
             claimName: pvc-streaming-media
         - name: dfs
           hostPath:
-            path: /mnt/decypharr-dfs
-            type: DirectoryOrCreate  # FUSE mount propagated from decypharr-streaming via Bidirectional hostPath
+            path: /mnt/dfs  # FUSE mount propagated from decypharr-streaming to host /mnt/dfs
+            type: DirectoryOrCreate
       containers:
         - name: radarr
           image: linuxserver/radarr:latest

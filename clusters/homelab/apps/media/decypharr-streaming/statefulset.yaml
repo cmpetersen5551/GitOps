@@ -114,13 +114,13 @@ spec:
             - name: streaming-media
               mountPath: /mnt/streaming-media
             - name: dfs-host
-              mountPath: /mnt/dfs
-              mountPropagation: Bidirectional  # Propagates FUSE mount to host via MS_SHARED
+              mountPath: /mnt
+              mountPropagation: Bidirectional  # Mount parent /mnt so forceUnmount() doesn't destroy peer group
       volumes:
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
         - name: dfs-host
           hostPath:
-            path: /mnt/decypharr-dfs  # Consumers mount this same path with HostToContainer
-            type: DirectoryOrCreate
+            path: /mnt  # Mount parent so FUSE at /mnt/dfs propagates to host /mnt/dfs
+            type: Directory
