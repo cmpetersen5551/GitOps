@@ -36,6 +36,8 @@ spec:
                   - key: node.longhorn.io/primary
                     operator: In
                     values: ["true"]
+      # Require primary storage node — prevents drift to w2 when w1 is available
+      # (preferred alone is ignored when scheduler has other options)
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
