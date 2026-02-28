@@ -1,6 +1,4 @@
-# Copilot Instructions for GitOps Cluster
-
-**Repo**: cmpetersen5551/GitOps, branch: `main` | k3s homelab, Flux v2, Longhorn 2-node HA
+# Copilot Instructions for k3s Homelab (Flux v2, Longhorn 2-node HA)
 
 ## Rules
 
