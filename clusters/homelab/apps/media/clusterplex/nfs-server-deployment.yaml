@@ -49,7 +49,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: nfs-server
-          image: siomiz/nfs-server:latest
+          image: kvaps/nfs-server:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -69,10 +69,10 @@ spec:
               containerPort: 111
               protocol: TCP
           env:
-            - name: NFS_EXPORT_0
-              value: /export/dfs *(ro,sync,no_subtree_check,no_root_squash)
-            - name: NFS_LOG_LEVEL
-              value: "INFO"
+            - name: SHARED_DIRECTORY
+              value: /export/dfs
+            - name: PERMITTED_NETWORKS
+              value: "10.0.0.0/8"
           volumeMounts:
             - name: dfs
               mountPath: /export/dfs
