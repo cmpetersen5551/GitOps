@@ -26,39 +26,6 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      # Node affinity: REQUIRE storage nodes (w1/w2), STRONGLY prefer w1 primary
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node.longhorn.io/storage
-                    operator: In
-                    values:
-                      - enabled
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100  # Strongly prefer primary node (w1) for active-passive
-              preference:
-                matchExpressions:
-                  - key: node.longhorn.io/primary
-                    operator: In
-                    values:
-                      - "true"
-      # Tolerations: Allow scheduling on Longhorn storage nodes
-      tolerations:
-        - key: node.longhorn.io/storage
-          operator: Equal
-          value: enabled
-          effect: NoSchedule
-        # Faster failover: Evict after 30 seconds instead of default 5 minutes
-        - key: node.kubernetes.io/unreachable
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
-        - key: node.kubernetes.io/not-ready
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
       # Volumes: NFS shares from Unraid and streaming media
       volumes:
         - name: media-nfs

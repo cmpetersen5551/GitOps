@@ -11,3 +11,8 @@ resources:
   - ./nfs
   - ./longhorn
 
+patches:
+  - path: patches/ha-affinity.yaml
+    target:
+      kind: StatefulSet
+

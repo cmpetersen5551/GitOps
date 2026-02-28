@@ -1,0 +1,40 @@
+# HA node affinity + tolerations — applied to all StatefulSets via kustomization target patch.
+# Edit here to change placement policy for every media workload at once.
+# See docs/DECISIONS.md for the active-passive HA strategy rationale.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: placeholder  # overridden by kustomization target selector
+spec:
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30

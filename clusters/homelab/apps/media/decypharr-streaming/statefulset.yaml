@@ -43,38 +43,6 @@ spec:
       # Disable Kubernetes service links to prevent auto-injection of DECYPHARR_PORT env var
       # The new blackhole:beta image incorrectly parses the tcp://IP:PORT format
       enableServiceLinks: false
-      # Node affinity: REQUIRE storage nodes, prefer w1 primary
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node.longhorn.io/storage
-                    operator: In
-                    values:
-                      - enabled
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - key: node.longhorn.io/primary
-                    operator: In
-                    values:
-                      - "true"
-      # Tolerations for storage nodes with faster failover
-      tolerations:
-        - key: node.longhorn.io/storage
-          operator: Equal
-          value: enabled
-          effect: NoSchedule
-        - key: node.kubernetes.io/unreachable
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
-        - key: node.kubernetes.io/not-ready
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
       # Decypharr: FUSE-based DFS filesystem exposed to host via Bidirectional
       # hostPath mount propagation. Consumers receive the mount automatically
       # via HostToContainer (MS_SLAVE) — no SMB/CIFS layer needed.
