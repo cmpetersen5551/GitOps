@@ -110,6 +110,7 @@ spec:
               mountPath: /config
             - name: dfs
               mountPath: /mnt/dfs
+              mountPropagation: Bidirectional
             - name: streaming-media
               mountPath: /mnt/streaming-media
             - name: media-nfs  # Read-only access to Unraid media
@@ -146,8 +147,9 @@ spec:
       # Volumes
       volumes:
         - name: dfs
-          emptyDir:
-            sizeLimit: 500Gi  # Large enough for active DFS cache
+          hostPath:
+            path: /mnt/decypharr-dfs
+            type: DirectoryOrCreate
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-streaming-media
