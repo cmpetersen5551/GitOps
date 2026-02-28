@@ -107,9 +107,37 @@ tolerations:
 - Longhorn HelmRelease + StorageClasses
 - Infrastructure components (MetalLB, Traefik, descheduler, fencing)
 
-**Outside Git (manual, documented in LONGHORN_NODE_SETUP.md)**:
+**Outside Git (manual runbook below)**:
 - Node labels and taints (infrastructure layer; rarely changes)
 - Host-level packages (nfs-common, open-iscsi)
+
+### Node Setup Runbook
+
+Run once when adding/rebuilding a storage node (w1 or w2):
+
+```bash
+# 1. Host-level packages (required for RWX volumes — CSI uses host mount.nfs binary)
+apt-get update && apt-get install -y nfs-common open-iscsi
+
+# 2. Node labels
+kubectl label node k3s-w1 node.longhorn.io/storage=enabled
+kubectl label node k3s-w1 node.longhorn.io/create-default-disk=true   # triggers disk creation at /var/lib/longhorn
+kubectl label node k3s-w1 node.longhorn.io/primary=true               # w2: set to false
+kubectl label node k3s-w1 workload-priority=primary                   # w2: set to backup
+
+# 3. Node taints
+kubectl taint node k3s-w1 node.longhorn.io/storage=enabled:NoSchedule --overwrite
+
+# Repeat for k3s-w2 (swap primary→false, workload-priority→backup)
+
+# 4. Verify
+kubectl get nodes k3s-w1 k3s-w2 --show-labels | grep longhorn
+kubectl get nodes.longhorn.io -n longhorn-system
+```
+
+**Two different labels — different purposes**:
+- `node.longhorn.io/storage=enabled` — controls where Longhorn manager/system pods schedule
+- `node.longhorn.io/create-default-disk=true` — triggers disk creation (requires `createDefaultDiskLabeledNodes: true` in HelmRelease)
 
 **Never in Git**:
 - SSH credentials, API keys, passwords

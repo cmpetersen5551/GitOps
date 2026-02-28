@@ -23,10 +23,7 @@
 | Doc | What's in it |
 |-----|-------------|
 | `docs/STATE.md` | Current nodes, pods, PVCs, infra |
-| `docs/DECISIONS.md` | HA strategy, DFS arch, storage choices + rejected alternatives |
+| `docs/DECISIONS.md` | HA strategy, DFS arch, storage choices + rejected alternatives + node setup runbook |
 | `docs/GOTCHAS.md` | Symptom → root cause → fix index |
-| `docs/LONGHORN_NODE_SETUP.md` | Node labels/taints runbook |
-| `docs/LONGHORN_HA_MIGRATION.md` | Longhorn 2-node deep-dive |
-| `docs/LONGHORN_SYSTEM_COMPONENTS_SCHEDULING.md` | RWX share-manager fix |
 
 **Last Updated**: 2026-02-28
