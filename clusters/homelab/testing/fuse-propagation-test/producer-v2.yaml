@@ -1,12 +1,13 @@
 ---
-# FUSE Producer v2 — Uses real bindfs FUSE mount for propagation test
+# FUSE Producer v2 — Uses real squashfuse FUSE mount for propagation test
 #
 # Phase 2 test: Verifies a genuine FUSE mount (not just file writes) created
 # inside a privileged container propagates to the host via Bidirectional
 # hostPath, and is then visible to a non-privileged consumer via HostToContainer.
 #
-# bindfs mirrors a source directory via FUSE — same kernel path as Decypharr's
-# hanwen/go-fuse mount. If this works, the migration mechanism is validated.
+# squashfuse mounts a read-only squashfs image via FUSE — same kernel code path
+# as Decypharr's hanwen/go-fuse mount. If this test passes, the migration
+# mechanism is validated for production use.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -34,35 +35,35 @@ spec:
     args:
       - |
         set -e
-        echo "=== Phase 2 FUSE Propagation Test (bindfs) ==="
-        apk add --no-cache bindfs --quiet
+        echo "=== Phase 2 FUSE Propagation Test (squashfuse) ==="
+        apk add --no-cache squashfs-tools squashfuse fuse --quiet
 
-        # Source data — files with nlink=0 semantics (bindfs inherits st_nlink from source)
+        # Build a squashfs image with test files
         mkdir -p /tmp/fuse-source
         echo "hello from FUSE" > /tmp/fuse-source/regular-file.txt
-        echo "this file proves st_nlink=0 doesnt break POSIX reads" > /tmp/fuse-source/nlink-test.txt
+        echo "nlink=0 shouldnt block POSIX reads" > /tmp/fuse-source/nlink-test.txt
         mkdir -p /tmp/fuse-source/subdir
         echo "file in subdir" > /tmp/fuse-source/subdir/nested.txt
-
-        # Create a symlink INSIDE the FUSE (mirrors Decypharr's symlink-based downloads)
-        ln -s /mnt/dfs/regular-file.txt /tmp/fuse-source/symlink-to-file.txt
-
-        # Mount bindfs FUSE at the hostPath volume (Bidirectional)
-        echo "Mounting bindfs FUSE at /mnt/dfs..."
-        bindfs /tmp/fuse-source /mnt/dfs
-        echo "Mount result: $(mount | grep '/mnt/dfs')"
-        echo "FUSE filesystem type: $(stat -f -c '%T' /mnt/dfs 2>/dev/null || echo 'unknown')"
-
-        # Signal consumer that FUSE is ready
+        # Note: symlinks inside squashfs are native filesystem symlinks
+        ln -s regular-file.txt /tmp/fuse-source/symlink-to-file.txt
+        # Signal file
         echo "fuse-ready" > /tmp/fuse-source/ready-marker.txt
-        echo "Mount visible to consumer: $(ls /mnt/dfs)"
 
-        # Keep alive
+        mksquashfs /tmp/fuse-source /tmp/test.sqsh -quiet -noappend
+        echo "squashfs image built: $(stat -c '%s bytes' /tmp/test.sqsh)"
+
+        # Mount squashfuse FUSE at the hostPath volume (Bidirectional)
+        echo "Mounting squashfuse at /mnt/dfs..."
+        squashfuse -o allow_other /tmp/test.sqsh /mnt/dfs
+        echo "Mount result: '$(mount | grep '/mnt/dfs')'"
+        echo "Filesystem type via stat: $(stat -f -c '%T' /mnt/dfs 2>/dev/null || echo 'n/a')"
+        echo "Files in FUSE mount: $(ls /mnt/dfs)"
+
+        # Keep alive so mount stays active for consumer validation
         COUNT=0
         while true; do
           COUNT=$((COUNT + 1))
-          echo "[$(date)] bindfs FUSE alive, iter=$COUNT, files=$(ls /mnt/dfs | wc -l)"
-          echo "heartbeat-$COUNT-$(date +%s)" >> /tmp/fuse-source/heartbeat.log
+          echo "[$(date)] squashfuse FUSE alive, iter=$COUNT, files=$(ls /mnt/dfs | wc -l)"
           sleep 30
         done
 
