@@ -1,0 +1,93 @@
+---
+# FUSE Producer v2 — Uses real bindfs FUSE mount for propagation test
+#
+# Phase 2 test: Verifies a genuine FUSE mount (not just file writes) created
+# inside a privileged container propagates to the host via Bidirectional
+# hostPath, and is then visible to a non-privileged consumer via HostToContainer.
+#
+# bindfs mirrors a source directory via FUSE — same kernel path as Decypharr's
+# hanwen/go-fuse mount. If this works, the migration mechanism is validated.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fuse-producer-v2
+  namespace: fuse-test
+  labels:
+    test: fuse-propagation-v2
+    role: producer
+spec:
+  nodeName: k3s-w2
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+
+  containers:
+  - name: fuse-creator
+    image: alpine:3.19
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+      capabilities:
+        add: [SYS_ADMIN]
+
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        set -e
+        echo "=== Phase 2 FUSE Propagation Test (bindfs) ==="
+        apk add --no-cache bindfs --quiet
+
+        # Source data — files with nlink=0 semantics (bindfs inherits st_nlink from source)
+        mkdir -p /tmp/fuse-source
+        echo "hello from FUSE" > /tmp/fuse-source/regular-file.txt
+        echo "this file proves st_nlink=0 doesnt break POSIX reads" > /tmp/fuse-source/nlink-test.txt
+        mkdir -p /tmp/fuse-source/subdir
+        echo "file in subdir" > /tmp/fuse-source/subdir/nested.txt
+
+        # Create a symlink INSIDE the FUSE (mirrors Decypharr's symlink-based downloads)
+        ln -s /mnt/dfs/regular-file.txt /tmp/fuse-source/symlink-to-file.txt
+
+        # Mount bindfs FUSE at the hostPath volume (Bidirectional)
+        echo "Mounting bindfs FUSE at /mnt/dfs..."
+        bindfs /tmp/fuse-source /mnt/dfs
+        echo "Mount result: $(mount | grep '/mnt/dfs')"
+        echo "FUSE filesystem type: $(stat -f -c '%T' /mnt/dfs 2>/dev/null || echo 'unknown')"
+
+        # Signal consumer that FUSE is ready
+        echo "fuse-ready" > /tmp/fuse-source/ready-marker.txt
+        echo "Mount visible to consumer: $(ls /mnt/dfs)"
+
+        # Keep alive
+        COUNT=0
+        while true; do
+          COUNT=$((COUNT + 1))
+          echo "[$(date)] bindfs FUSE alive, iter=$COUNT, files=$(ls /mnt/dfs | wc -l)"
+          echo "heartbeat-$COUNT-$(date +%s)" >> /tmp/fuse-source/heartbeat.log
+          sleep 30
+        done
+
+    volumeMounts:
+    - name: fuse-bridge-v2
+      mountPath: /mnt/dfs
+      mountPropagation: Bidirectional
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  volumes:
+  - name: fuse-bridge-v2
+    hostPath:
+      path: /tmp/fuse-test-bridge-v2
+      type: DirectoryOrCreate
+
+  restartPolicy: OnFailure
+  tolerations:
+  - key: node.longhorn.io/storage
+    operator: Equal
+    value: enabled
+    effect: NoSchedule

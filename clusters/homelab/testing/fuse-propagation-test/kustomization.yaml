@@ -14,7 +14,11 @@ commonAnnotations:
 
 resources:
   - namespace.yaml
-  - producer.yaml
-  - consumer.yaml
+  # Phase 1: regular file propagation (proven - can be disabled)
+  # - producer.yaml
+  # - consumer.yaml
+  # Phase 2: real FUSE mount propagation via bindfs (active test)
+  - producer-v2.yaml
+  - consumer-v2.yaml
 
 # Note: This test is managed by Flux when enabled in the parent testing/kustomization.yaml
