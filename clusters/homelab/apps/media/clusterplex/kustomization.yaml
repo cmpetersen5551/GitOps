@@ -26,10 +26,12 @@ resources:
   
   # Plex Media Server
   - service-pms.yaml
+  - service-pms-headless.yaml
   - pms-deployment.yaml
   
   # Orchestrator
   - service-orchestrator.yaml
+  - service-orchestrator-headless.yaml
   - orchestrator-deployment.yaml
   
   # Workers (scheduled on w3 GPU node)

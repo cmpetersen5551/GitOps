@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: clusterplex-pms
   namespace: media
@@ -7,9 +7,8 @@ metadata:
     app.kubernetes.io/name: clusterplex-pms
     app.kubernetes.io/part-of: clusterplex
 spec:
+  serviceName: clusterplex-pms-headless
   replicas: 1
-  strategy:
-    type: Recreate  # Required — config PVC is RWO; rolling update deadlocks on node change
   selector:
     matchLabels:
       app.kubernetes.io/name: clusterplex-pms

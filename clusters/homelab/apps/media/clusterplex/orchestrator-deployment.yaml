@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: clusterplex-orchestrator
   namespace: media
@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: clusterplex-orchestrator
     app.kubernetes.io/part-of: clusterplex
 spec:
+  serviceName: clusterplex-orchestrator-headless
   replicas: 1
   selector:
     matchLabels:
