@@ -161,3 +161,13 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 ### NFS PV needs a stable server address but pod IP changes
 - **Cause**: NFS PVs are mounted at the kubelet (node) level, so they can't use in-cluster DNS (`*.svc.cluster.local`). Pod IPs change on every restart.
 - **Fix**: Pin the service `spec.clusterIP` in the Service manifest and use that IP in the PV's `nfs.server` field. kube-proxy's iptables rules on each node forward ClusterIP traffic to the current pod IP, providing transparent HA routing.
+
+### Static NFS PV breaks after Longhorn PVC is deleted and recreated
+- **Symptom**: Worker pod can't mount `streaming-media` or `transcode` after a PVC was deleted/recreated; volume mount hangs or fails with "connection refused".
+- **Cause**: Longhorn RWX volumes use share-manager pods, each with their own Service. Deleting a PVC destroys that Service and creates a new one on recreation — with a **new ClusterIP**. The static PV still points to the old, now-defunct IP.
+- **Fix**: After recreating a Longhorn RWX PVC, get the new share-manager Service ClusterIP:
+  ```bash
+  kubectl get svc -n longhorn-system | grep share-manager
+  ```
+  Then update the corresponding static PV's `spec.nfs.server` field and commit. This only applies to volumes accessed by w3 (which lacks the Longhorn CSI driver); w1/w2 use CSI directly and are unaffected.
+- **Prevention**: Treat these PVCs as permanent (never delete unless decommissioning ClusterPlex). Use `persistentVolumeReclaimPolicy: Retain` on all associated PVs.

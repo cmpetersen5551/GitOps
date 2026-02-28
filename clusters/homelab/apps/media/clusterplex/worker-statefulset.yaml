@@ -113,26 +113,15 @@ spec:
       volumes:
         - name: media-nfs
           persistentVolumeClaim:
-            claimName: pvc-media-nfs
+            claimName: pvc-nfs-media-w3
         - name: streaming-media
           persistentVolumeClaim:
-            claimName: pvc-streaming-media
+            claimName: pvc-streaming-media-w3
         - name: dfs
           persistentVolumeClaim:
             claimName: clusterplex-dfs-nfs
         - name: transcode
           persistentVolumeClaim:
-            claimName: clusterplex-transcode
-  volumeClaimTemplates:
-    - metadata:
-        name: codecs
-        labels:
-          app.kubernetes.io/name: clusterplex-codecs
-          app.kubernetes.io/part-of: clusterplex
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        storageClassName: longhorn-simple
-        resources:
-          requests:
-            storage: 1Gi
+            claimName: clusterplex-transcode-w3
+        - name: codecs
+          emptyDir: {}

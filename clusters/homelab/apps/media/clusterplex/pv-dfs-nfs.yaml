@@ -13,8 +13,9 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   nfs:
     server: 10.43.160.244  # ClusterIP of clusterplex-nfs-server svc — routes to wherever pod runs (HA)
-    path: /export/dfs
+    path: /                  # NFSv4 root — fsid=0 export IS the /export/dfs directory
   mountOptions:
+    - nfsvers=4      # Force NFSv4 — avoids NFSv3 portmapper/mountd complexity
     - noac           # Disable attribute caching (prevents staleness)
     - soft           # Fail fast if NFS server unreachable
     - timeo=10       # 1 second timeout (10 = 1s)
