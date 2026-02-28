@@ -49,7 +49,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: nfs-server
-          image: kvaps/nfs-server:latest
+          image: itsthenetwork/nfs-server:fixed
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -62,17 +62,12 @@ spec:
             - name: nfs
               containerPort: 2049
               protocol: TCP
-            - name: mountd
-              containerPort: 20048
-              protocol: TCP
             - name: rpcbind
               containerPort: 111
               protocol: TCP
           env:
-            - name: SHARED_DIRECTORY
+            - name: SHARED_DIRECTORY_0
               value: /export/dfs
-            - name: PERMITTED_NETWORKS
-              value: "10.0.0.0/8"
           volumeMounts:
             - name: dfs
               mountPath: /export/dfs
