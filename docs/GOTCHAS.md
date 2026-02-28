@@ -87,6 +87,23 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 
 ---
 
+## MetalLB / BGP
+
+### BGP routes in RIB but not installed in kernel routing table
+- **Symptom**: `show ip bgp` shows routes with `*>` (best), but `show ip route bgp` returns nothing
+- **Cause**: Usually zebra is not running or lost its connection to bgpd; FRR should install best-path BGP routes into the kernel FIB automatically via zebra — no `redistribute bgp` needed
+- **Fix**: On UDM, check `ps aux | grep zebra` and `vtysh -c "show daemons"`; restart FRR if zebra is missing. Also verify bgpd wasn't started with `--no_kernel` flag.
+
+### BGP VIPs unreachable despite routes being installed
+- **Cause**: MetalLB VIP pool subnet overlaps with a connected interface subnet (e.g., both on `192.168.1.0/24`); connected routes take precedence over BGP routes
+- **Fix**: VIP pool **must** be a separate subnet (e.g., `192.168.100.0/24`) not assigned to any physical interface on the UDM
+
+### `ip prefix-list` entries not taking effect on UDM
+- **Cause**: In UniFi's FRR config, `ip prefix-list` entries must appear **after** the `router bgp` block
+- **Fix**: Reorder config so `router bgp` comes first, then prefix-list definitions below it
+
+---
+
 ## Traefik / Ingress
 
 ### 404 after pod is running
