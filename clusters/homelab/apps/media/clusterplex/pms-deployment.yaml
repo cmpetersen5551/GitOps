@@ -105,7 +105,7 @@ spec:
             initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 60  # 10 min — linuxserver init runs apt-get on first boot
           readinessProbe:
             httpGet:
               path: /identity
