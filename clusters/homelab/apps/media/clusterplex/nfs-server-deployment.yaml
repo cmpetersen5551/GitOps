@@ -45,6 +45,18 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 30
+      initContainers:
+        - name: load-nfsd
+          image: busybox:latest
+          command: ["modprobe", "nfsd"]
+          securityContext:
+            privileged: true
+            capabilities:
+              add: [SYS_MODULE]
+          volumeMounts:
+            - name: kernel-modules
+              mountPath: /lib/modules
+              readOnly: true
       containers:
         - name: nfs-server
           image: erichough/nfs-server:latest
@@ -87,6 +99,10 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
       volumes:
+        - name: kernel-modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
         - name: dfs
           hostPath:
             path: /mnt/dfs
