@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: clusterplex-dfs-nfs-pv
+  labels:
+    app.kubernetes.io/name: clusterplex-dfs-nfs
+    app.kubernetes.io/part-of: clusterplex
+spec:
+  capacity:
+    storage: 100Gi  # Arbitrary; NFS doesn't enforce quotas at PV level
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: clusterplex-nfs-server  # Service DNS name (ClusterIP resolves to NFS pod)
+    path: /export/dfs
+  mountOptions:
+    - noac           # Disable attribute caching (prevents staleness)
+    - soft           # Fail fast if NFS server unreachable
+    - timeo=10       # 1 second timeout (10 = 1s)
+    - retrans=2      # Retry twice before failing

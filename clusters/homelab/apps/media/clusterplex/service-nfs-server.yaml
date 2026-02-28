@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterplex-nfs-server
+  namespace: media
+  labels:
+    app.kubernetes.io/name: clusterplex-nfs-server
+    app.kubernetes.io/part-of: clusterplex
+spec:
+  type: ClusterIP
+  ports:
+    - name: nfs
+      port: 2049
+      protocol: TCP
+      targetPort: nfs
+    - name: mountd
+      port: 20048
+      protocol: TCP
+      targetPort: mountd
+    - name: rpcbind
+      port: 111
+      protocol: TCP
+      targetPort: rpcbind
+  selector:
+    app.kubernetes.io/name: clusterplex-nfs-server

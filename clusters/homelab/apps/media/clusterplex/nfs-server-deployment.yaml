@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clusterplex-nfs-server
+  namespace: media
+  labels:
+    app.kubernetes.io/name: clusterplex-nfs-server
+    app.kubernetes.io/part-of: clusterplex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clusterplex-nfs-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clusterplex-nfs-server
+        app.kubernetes.io/part-of: clusterplex
+    spec:
+      securityContext:
+        fsGroup: 65534  # NFS nobdy user
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values: [enabled]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      containers:
+        - name: nfs-server
+          image: erichough/nfs-server:2.4.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - SYS_RESOURCE
+                - NET_ADMIN
+          ports:
+            - name: nfs
+              containerPort: 2049
+              protocol: TCP
+            - name: mountd
+              containerPort: 20048
+              protocol: TCP
+            - name: rpcbind
+              containerPort: 111
+              protocol: TCP
+          env:
+            - name: NFS_EXPORT_0
+              value: /export/dfs *(ro,sync,no_subtree_check,no_root_squash)
+            - name: NFS_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: dfs
+              mountPath: /export/dfs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - test
+                - -f
+                - /export/dfs
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: dfs
+          hostPath:
+            path: /mnt/dfs
+            type: DirectoryOrCreate

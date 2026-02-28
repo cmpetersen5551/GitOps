@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clusterplex-pms
+  namespace: media
+  labels:
+    app.kubernetes.io/name: clusterplex-pms
+    app.kubernetes.io/part-of: clusterplex
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: http
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: plex.homelab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: clusterplex-pms
+                port:
+                  number: 32400

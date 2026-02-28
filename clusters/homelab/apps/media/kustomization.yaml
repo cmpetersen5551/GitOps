@@ -10,6 +10,7 @@ resources:
   - ./decypharr-download
   - ./nfs
   - ./longhorn
+  - ./clusterplex
 
 patches:
   - path: patches/ha-affinity.yaml

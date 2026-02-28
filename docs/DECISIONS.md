@@ -169,3 +169,61 @@ Reason: Traefik routes to port 80 by default; inconsistent port numbers cause 40
 
 **Annotation that does NOT work**: `traefik.ingress.kubernetes.io/router.entrypoints: web,websecure`  
 Correct values are `http` and `https` matching Traefik's internal entrypoint names.
+
+---
+
+## ClusterPlex (Distributed Plex Transcoding)
+
+**Chosen**: ClusterPlex with separate NFS-server pod exporting `/mnt/dfs` (2026-02-28)
+
+**Architecture**:
+- **PMS (Plex Media Server)**: Deployment on w1 (storage affinity, prefer primary), single replica
+  - Mounts: `/mnt/media` (Unraid NFS), `/mnt/streaming-media` (Longhorn RWX), `/mnt/dfs` (DFS NFS), `/transcode` (Longhorn RWX), `/config` (Longhorn RWO)
+  - Listens on port 32400 (PMS) + 32499 (Local Relay for workers)
+  - Manual post-deploy: Sign in to Plex UI, configure transcoder path = `/transcode`
+
+- **Orchestrator**: Deployment on w1 (storage affinity, prefer primary), single replica, stateless
+  - Receives transcode requests from PMS over websocket
+  - Distributes to available workers via load balancing (LOAD_TASKS strategy)
+  - Port 3500 (internal ClusterIP only)
+
+- **Workers**: StatefulSet on w3 (GPU node affinity required), 2+ replicas
+  - Each worker talks to orchestrator at `http://clusterplex-orchestrator:3500`
+  - Mounts: same as PMS `/mnt/media`, `/mnt/streaming-media`, `/mnt/dfs`, `/transcode`
+  - Per-worker `/codecs` volume (RWO) for codec caching via volumeClaimTemplate
+  - Port 3501 (health/status)
+  - Pod anti-affinity: avoid other workers (spread across w3 topology), soft preference away from PMS
+
+- **NFS-Server**: Deployment on w1/w2 (storage affinity, prefer primary)
+  - Mounts `/mnt/dfs` via hostPath from w1/w2 host (where decypharr-streaming creates FUSE mount)
+  - Exports as read-only NFS on port 2049
+  - Automatic failover: if w1 fails → pod reschedules to w2 → mounts w2's host's `/mnt/dfs`
+  - **Critical**: On failover, must also ensure `/mnt/dfs` is exported on w2 host. See failover runbook below.
+
+**Streaming Transcoding HA**:
+- Normal (w1 alive): decypharr-streaming on w1 → `/mnt/dfs` on w1 host → NFS-server exports → Workers mount via NFS PVC
+- w1 fails: decypharr + NFS-server reschedule to w2 → w2 host's `/mnt/dfs` exported → Workers' NFS mounts automatically use w2's export
+- w1 recovers: descheduler evicts pods after ~5min → PMS + NFS-server failback to w1
+- w3 workers stay scheduled on w3 throughout (no failover needed for compute nodes)
+
+**Failover Checklist** (if w1 fails and doesn't recover quickly):
+1. PMS + decypharr-streaming + NFS-server pods reschedule to w2 automatically
+2. **Manual step**: On w2 host, enable NFS export of `/mnt/dfs`:
+   ```bash
+   apt-get install -y nfs-kernel-server  # if not already installed
+   echo "/mnt/dfs *(ro,async,no_subtree_check,no_root_squash)" >> /etc/exports
+   exportfs -ra
+   ```
+3. Workers on w3 will remount NFS and resume transcoding (NFS client is resilient to server failover with soft/timeo/retrans mount options)
+4. Verify with: `kubectl logs -f -n media clusterplex-nfs-server-0` and `df -i` on w3 pods
+
+**Rejected Alternatives**:
+- Real NFS in k3s StatefulSet pod — tried, FUSE propagation still problematic
+- SMB/Samba sidecar — already rejected in DFS section; do not re-add even for PMS
+- GPU on w1 — w1 is storage-only, GPU acceleration is w3 purpose
+
+**Important Notes**:
+- Local Relay (NGINX proxy in PMS) is enabled by default (`LOCAL_RELAY_ENABLED=1`) — workers talk to relay at port 32499, not directly to PMS
+- Transcode temp MUST be RWX shared volume (both PMS and all workers write here)
+- `/config` (PMS app data) does NOT need to be shared with workers — Longhorn RWO is fine
+- `/codecs` auto-created per worker via volumeClaimTemplate (Longhorn RWO, codec cache is per-architecture)
