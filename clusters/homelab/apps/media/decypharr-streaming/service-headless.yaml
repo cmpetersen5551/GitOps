@@ -14,6 +14,6 @@ spec:
     app: decypharr-streaming
   ports:
     - name: http
-      port: 8080
-      targetPort: 8080
+      port: 8282
+      targetPort: 8282
       protocol: TCP

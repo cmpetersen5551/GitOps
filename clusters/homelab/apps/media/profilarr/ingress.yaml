@@ -5,8 +5,6 @@ kind: Ingress
 metadata:
   name: profilarr
   namespace: media
-  annotations:
-    kubernetes.io/ingress.class: traefik
 spec:
   ingressClassName: traefik
   rules:
