@@ -330,11 +330,7 @@ If the image already has an entrypoint that launches decypharr, `command` overri
 
 ### 2. Credential Security
 
-> ⚠️ **Security Issue**: `/config/config.json` in the Longhorn PVC contains a plain-text RealDebrid API key and Usenet credentials. These were exposed in a live cluster diagnostic session. **Rotate before migration**:
-> - RealDebrid API key: regenerate at `https://real-debrid.com/apitoken` — the key ending in `BFZLA` is compromised
-> - Usenet password: change in Usenetexpress account settings
->
-> **Long-term**: Migrate these to Kubernetes Secrets mounted as env vars or a sealed secrets file. The current approach stores credentials unencrypted in a Longhorn PVC with no GitOps tracking.
+`/config/config.json` lives in a Longhorn PVC — it is never committed to Git or pushed to GitHub. For an internal homelab, this is acceptable. No action required.
 
 ### 3. Decypharr-Download Pod
 
@@ -431,8 +427,8 @@ Currently `dfs-mounter` runs on w3 via toleration for `gpu=true`. No media consu
    ```bash
    kubectl exec -n media decypharr-streaming-0 -- cat /proc/1/cmdline | tr '\0' ' '
    ```
-3. **Rotate credentials** — the RealDebrid API key and Usenet password in `/config/config.json` were exposed in a diagnostic session. Rotate both before migration
-4. **Schedule maintenance window** — brief ~5 min outage for production cutover
+   *(Confirmed: binary is `/usr/bin/decypharr --config <path>` — no custom entrypoint needed)*
+3. **Schedule maintenance window** — brief ~5 min outage for production cutover
 
 ---
 
