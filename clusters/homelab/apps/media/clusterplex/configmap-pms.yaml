@@ -19,3 +19,10 @@ data:
   TRANSCODE_OPERATING_MODE: both
   LOCAL_RELAY_ENABLED: "1"
   LOCAL_RELAY_PORT: "32499"
+  # Tell Plex it lives behind a reverse proxy at this URL.
+  # Required so Plex registers the correct address with plex.tv for relay/remote access.
+  ADVERTISE_IP: "https://plex.homelab:443,http://plex.homelab:80"
+  # secureConnections=0 → "Disabled" (no internal HTTP→HTTPS redirect).
+  # Traefik handles TLS termination; Plex should not redirect clients itself.
+  # Without this, Plex sees X-Forwarded-Proto:https and redirects, causing an infinite loop.
+  PLEX_PREFERENCE_secureConnections: "0"

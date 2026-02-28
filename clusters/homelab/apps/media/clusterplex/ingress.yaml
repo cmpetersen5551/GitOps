@@ -7,11 +7,11 @@ metadata:
     app.kubernetes.io/name: clusterplex-pms
     app.kubernetes.io/part-of: clusterplex
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: http
-    # HTTPS causes a redirect loop: Traefik terminates TLS then proxies to Plex over plain
-    # HTTP; Plex sees HTTP and JS-redirects to https://, creating an infinite loop.
-    # Fix requires real certs + TLS passthrough or Plex proxy trust config.
-    # http://plex.homelab works fine for LAN access; Plex clients use port 32400 directly.
+    # Serve on both HTTP and HTTPS entrypoints.
+    # PLEX_PREFERENCE_secureConnections=0 in the PMS configmap disables Plex's internal
+    # HTTP→HTTPS redirect, which was the cause of the infinite redirect loop when Traefik
+    # forwarded X-Forwarded-Proto:https to Plex. Traefik terminates TLS; Plex serves HTTP.
+    traefik.ingress.kubernetes.io/router.entrypoints: http,https
 spec:
   ingressClassName: traefik
   rules:
