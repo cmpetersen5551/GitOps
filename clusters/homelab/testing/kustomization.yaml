@@ -11,6 +11,6 @@ metadata:
 
 resources:
   # Uncomment the test you want to run:
-  # - fuse-propagation-test
+  - fuse-propagation-test
 
 # To enable a test: uncomment its resources section above, commit, and Flux will deploy
