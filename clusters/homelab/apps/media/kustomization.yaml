@@ -16,6 +16,7 @@ patches:
   - path: patches/ha-affinity.yaml
     target:
       kind: StatefulSet
+      name: "(sonarr|radarr|prowlarr|profilarr|decypharr)"
   - path: patches/statefulset-strategy.yaml
     target:
       kind: StatefulSet
