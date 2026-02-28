@@ -70,7 +70,7 @@ spec:
         - name: dfs
           hostPath:
             path: /mnt/decypharr-dfs
-            type: Directory      # Kernel CIFS mount maintained by dfs-mounter DaemonSet, auto-reconnects on smbd restart
+            type: DirectoryOrCreate  # FUSE mount propagated from decypharr-streaming via Bidirectional hostPath
       containers:
         - name: radarr
           image: linuxserver/radarr:latest
@@ -121,7 +121,7 @@ spec:
               mountPath: /config
             - name: media-nfs  # Unraid media library
               mountPath: /mnt/media
-            - name: dfs  # Host-level CIFS mount to decypharr-streaming DFS, mounted by dfs-mounter DaemonSet
+            - name: dfs  # FUSE mount received from host via HostToContainer (MS_SLAVE) propagation
               mountPath: /mnt/dfs
               mountPropagation: HostToContainer
             - name: streaming-media  # Symlinks and streamed content
