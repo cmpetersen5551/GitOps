@@ -9,7 +9,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: nfs-unraid
+  storageClassName: longhorn-rwx
   resources:
     requests:
-      storage: 200Gi
+      storage: 50Gi
