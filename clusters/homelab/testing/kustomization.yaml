@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: testing
+  namespace: default
+
+# Testing resources — disabled by default, uncomment to enable specific tests
+# These are experimental tests not meant for production
+
+resources:
+  # Uncomment the test you want to run:
+  # - fuse-propagation-test
+
+# To enable a test: uncomment its resources section above, commit, and Flux will deploy

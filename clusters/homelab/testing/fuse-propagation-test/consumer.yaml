@@ -1,0 +1,120 @@
+---
+# FUSE Consumer Pod
+# Tests whether a pod can access files created by producer pod
+# in a HostToContainer hostPath volume
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fuse-consumer
+  namespace: fuse-test
+  labels:
+    test: fuse-propagation
+    role: consumer
+spec:
+  # Force deployment to w2 (same node as producer for first test)
+  nodeName: k3s-w2
+  
+  containers:
+  - name: reader
+    image: alpine:3.19
+    imagePullPolicy: IfNotPresent
+    
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        #!/bin/sh
+        set -x
+        
+        echo "=== FUSE Consumer Starting ==="
+        date
+        whoami
+        
+        # Wait for producer marker file to appear
+        echo "Waiting for producer marker..."
+        MAX_WAIT=30
+        ELAPSED=0
+        
+        while [ ! -f /mnt/dfs/.producer-ready ] && [ $ELAPSED -lt $MAX_WAIT ]; do
+          echo "[$ELAPSED/$MAX_WAIT] Producer marker not found yet..."
+          echo "Current /mnt/dfs contents:"
+          ls -la /mnt/dfs 2>&1 || echo "Cannot list /mnt/dfs"
+          sleep 1
+          ELAPSED=$((ELAPSED + 1))
+        done
+        
+        if [ ! -f /mnt/dfs/.producer-ready ]; then
+          echo "ERROR: Producer marker never appeared after $MAX_WAIT seconds!"
+          echo "Final /mnt/dfs contents:"
+          ls -la /mnt/dfs 2>&1
+          echo "Mount point details:"
+          mount | grep fuse-test-bridge || echo "Mount not found"
+          exit 1
+        fi
+        
+        echo "SUCCESS: Producer marker found at $(date)"
+        echo ""
+        echo "=== Full /mnt/dfs Contents ==="
+        ls -la /mnt/dfs/
+        
+        echo ""
+        echo "=== Reading Producer Files ==="
+        
+        if [ -f /mnt/dfs/producer-marker.txt ]; then
+          echo "Producer marker content:"
+          cat /mnt/dfs/producer-marker.txt
+        else
+          echo "WARNING: producer-marker.txt not found"
+        fi
+        
+        if [ -f /mnt/dfs/producer-heartbeat.log ]; then
+          echo "Producer heartbeat log:"
+          tail -10 /mnt/dfs/producer-heartbeat.log
+        else
+          echo "Heartbeat log not yet created"
+        fi
+        
+        echo ""
+        echo "=== Consumer Ready ==="
+        echo "Continuing to monitor /mnt/dfs accessibility..."
+        
+        # Keep running so we can observe mount stability
+        while true; do
+          echo "[$(date)] Consumer health check"
+          
+          # Quick stat check to verify mount is still alive
+          if test -r /mnt/dfs/.producer-ready; then
+            echo "[$(date)] Mount is accessible"
+          else
+            echo "[$(date)] ERROR: Mount became inaccessible!"
+            exit 1
+          fi
+          
+          sleep 30
+        done
+    
+    volumeMounts:
+    - name: fuse-bridge
+      mountPath: /mnt/dfs
+      mountPropagation: HostToContainer
+    
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+  
+  volumes:
+  - name: fuse-bridge
+    hostPath:
+      path: /tmp/fuse-test-bridge
+      type: DirectoryOrCreate
+  
+  restartPolicy: OnFailure
+  
+  tolerations:
+  - key: node.longhorn.io/storage
+    operator: Equal
+    value: enabled
+    effect: NoSchedule
