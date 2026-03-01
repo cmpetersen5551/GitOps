@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex-config-holder
+  namespace: media
+  labels:
+    app.kubernetes.io/name: plex-config-holder
+    app.kubernetes.io/part-of: plex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plex-config-holder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plex-config-holder
+        app.kubernetes.io/part-of: plex
+    spec:
+      # Runs on w1/w2 (Longhorn storage nodes) via CSI to keep the share-manager
+      # for pvc-plex-config alive. Without this, Longhorn shuts down the share-manager
+      # when nothing is mounting pvc-plex-config via CSI, and plex-0 on w3 loses NFS access.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values: [enabled]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      containers:
+        - name: holder
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: pvc-plex-config

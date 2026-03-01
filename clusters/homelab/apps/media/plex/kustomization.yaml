@@ -7,6 +7,7 @@ resources:
   - pvc-plex-config.yaml
   - pv-plex-config-w3.yaml
   - pvc-plex-config-w3.yaml
+  - plex-config-holder.yaml   # Keeps the Longhorn share-manager alive (CSI consumer on w1/w2)
   # Storage - media (Unraid NFS, static for w3)
   - pv-nfs-media-w3.yaml
   - pvc-nfs-media-w3.yaml
