@@ -10,3 +10,7 @@ resources:
   - storageclass-rwx.yaml  # RWX StorageClass for shared media libraries (NFSv4)
   - ingress.yaml
   - recurring-backup-plex.yaml
+  - recurring-backup-sonarr.yaml
+  - recurring-backup-radarr.yaml
+  - recurring-backup-prowlarr.yaml
+  - recurring-backup-profilarr.yaml
