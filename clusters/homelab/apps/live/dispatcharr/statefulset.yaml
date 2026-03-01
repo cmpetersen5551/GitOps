@@ -23,7 +23,7 @@ spec:
         runAsUser: 0
       containers:
         - name: dispatcharr
-          image: ghcr.io/dispatcharr/dispatcharr:v0.20.1
+          image: ghcr.io/dispatcharr/dispatcharr:0.20.1-20260228042735
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9191
