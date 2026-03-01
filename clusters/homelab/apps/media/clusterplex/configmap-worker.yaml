@@ -11,20 +11,15 @@ data:
   TZ: America/Chicago
   PUID: "1000"
   PGID: "1000"
-  # universal-package-install installs intel-media-va-driver which provides iHD_drv_video.so —
-  # required for Plex's VAAPI encoder (h264_vaapi / hevc_vaapi are compiled in) to access
-  # /dev/dri/renderD128. Plex Transcoder is built with --disable-hwaccels so hardware DECODE
-  # via -hwaccel flags doesn't work; FFMPEG_HWACCEL must be unset. Hardware ENCODE via VAAPI
-  # (software decode → hardware encode) does work and is triggered by enabling hardware
-  # transcoding in Plex UI settings.
-  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest|lscr.io/linuxserver/mods:universal-package-install
-  INSTALL_PACKAGES: i965-va-driver libva-drm2
-  LIBVA_DRIVER_NAME: i965
+  # Plex bundles libva and includes VA driver code compiled in. We rely on Plex's internal
+  # driver paths and don't install system packages. Instead, ensure /dev/dri is mounted
+  # with correct permissions (supplementalGroups=992 for render group, set in StatefulSet).
+  # Hardware ENCODE (h264_vaapi, hevc_vaapi) will work via Plex UI setting:
+  #   Settings → Transcoder → "Use hardware acceleration when available"
+  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest
+  LIBVA_DRIVER_NAME: iHD
+  LIBVA_DRIVERS_PATH: /usr/lib/plexmediaserver/Resources/lib/dri:/usr/lib/x86_64-linux-gnu/dri
   ORCHESTRATOR_URL: http://clusterplex-orchestrator:3500
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
   EAE_SUPPORT: "1"
-  # FFMPEG_HWACCEL intentionally unset — Plex Transcoder's custom ffmpeg build does not
-  # include h264_qsv/hevc_qsv/h264_vaapi-decode hwaccels. Setting this causes a fatal
-  # "Device creation failed: -12" and exit code 244. Hardware acceleration is provided by
-  # Plex's internal VAAPI encode path (controlled via Plex UI → Settings → Transcoder).
