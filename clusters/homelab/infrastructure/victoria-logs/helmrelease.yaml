@@ -43,3 +43,14 @@ spec:
         limits:
           memory: 1Gi
           cpu: 500m
+
+  vector:
+    enabled: true
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node.longhorn.io/storage
+        operator: Equal
+        value: enabled
+        effect: NoSchedule
