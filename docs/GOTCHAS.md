@@ -89,6 +89,12 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 
 ## Live TV Stack (live namespace)
 
+### Traefik entrypoint is named 'http', not 'web'
+- **Symptom**: All live namespace ingresses return Traefik's "404 page not found" despite pod and service being healthy
+- **Cause**: Traefik deployment uses `--entrypoints.http.address=:8000/tcp` — the entrypoint is named `http`. Ingresses annotated with `traefik.ingress.kubernetes.io/router.entrypoints: web` reference a non-existent entrypoint; Traefik silently drops the route.
+- **Fix**: Change annotation to `traefik.ingress.kubernetes.io/router.entrypoints: http`. Alternatively, omit the annotation entirely to use all entrypoints.
+- **Confirms**: Ingresses without this annotation (e.g., sonarr, radarr) work fine; Traefik uses all entrypoints by default.
+
 ### pluto-for-channels container port is 80, not 8080
 - **Symptom**: Service targets port 8080, pod never becomes healthy; container serves HTTP on port 80
 - **Cause**: The `jonmaddox/pluto-for-channels` image listens on port 80. Service was incorrectly configured with `targetPort: 8080`.
