@@ -21,14 +21,21 @@ spec:
         size: 10Gi
         storageClassName: longhorn-simple
         mountPath: /victorialogs-data
-      
-      vmui:
-        enabled: true
-      
+
+      retentionPeriod: "4d"
+
       extraArgs:
-        retentionPeriod: 4d
         storageDataPath: /victorialogs-data
-      
+
+      nodeSelector:
+        node.longhorn.io/create-default-disk: "true"
+
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+
       resources:
         requests:
           memory: 512Mi
@@ -36,25 +43,3 @@ spec:
         limits:
           memory: 1Gi
           cpu: 500m
-  
-  postRenderers:
-    - kustomize:
-        patchesJson6902:
-          - target:
-              group: apps
-              version: v1
-              kind: StatefulSet
-              name: victoria-logs-victoria-logs-single-server
-              namespace: victoria-logs
-            patch:
-              - op: add
-                path: /spec/template/spec/nodeSelector
-                value:
-                  node.longhorn.io/create-default-disk: "true"
-              - op: add
-                path: /spec/template/spec/tolerations
-                value:
-                  - key: node.longhorn.io/storage
-                    operator: Equal
-                    value: enabled
-                    effect: NoSchedule
