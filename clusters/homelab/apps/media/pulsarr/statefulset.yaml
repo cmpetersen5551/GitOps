@@ -24,7 +24,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: config-pulsarr-0  # Created by volumeClaimTemplate
+            claimName: data-pulsarr-0  # Created by volumeClaimTemplate
         - name: config
           configMap:
             name: pulsarr-config
@@ -66,7 +66,7 @@ spec:
   podManagementPolicy: OrderedReady
   volumeClaimTemplates:
     - metadata:
-        name: config
+        name: data
         labels:
           app: pulsarr
       spec:
