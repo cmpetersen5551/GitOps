@@ -23,6 +23,7 @@ data:
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
   EAE_SUPPORT: "1"
-  # Inject -hwaccel vaapi for hardware decode. Hardware encode (h264_vaapi) is driven
-  # by PMS Preferences.xml HardwareAcceleratedCodecs=1 — set directly in the PVC.
-  FFMPEG_HWACCEL: vaapi
+  # FFMPEG_HWACCEL intentionally omitted: PMS (on w1, no GPU) always generates libx264 args.
+  # Workers receive those args and execute them on w3's CPU. Injecting -hwaccel vaapi
+  # breaks transcodes because PMS overrides LIBVA_DRIVERS_PATH with its own driver cache
+  # which has no iHD driver. Hardware encode is not achievable without PMS having GPU access.
