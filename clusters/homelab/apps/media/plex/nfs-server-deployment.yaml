@@ -51,7 +51,7 @@ spec:
       # inside this container so it can export them via NFS to cluster.
       initContainers:
         - name: load-nfsd
-          image: busybox:latest
+          image: busybox:1.37.0
           command: ["modprobe", "nfsd"]
           securityContext:
             privileged: true
@@ -63,7 +63,7 @@ spec:
               readOnly: true
       containers:
         - name: nfs-server
-          image: erichough/nfs-server:latest
+          image: erichough/nfs-server:2.2.1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

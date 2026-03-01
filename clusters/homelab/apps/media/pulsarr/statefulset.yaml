@@ -33,7 +33,7 @@ spec:
                 path: .env
       containers:
         - name: pulsarr
-          image: lakker/pulsarr:latest
+          image: lakker/pulsarr:0.12.2 # latest stable; all newer tags are beta
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3003

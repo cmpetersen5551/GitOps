@@ -54,7 +54,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: holder
-          image: busybox:latest
+          image: busybox:1.37.0
           command: ["sleep", "infinity"]
           volumeMounts:
             - name: config

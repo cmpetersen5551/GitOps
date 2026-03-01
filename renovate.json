@@ -1,0 +1,113 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "helm": {
+    "enabled": true
+  },
+  "docker": {
+    "enabled": true
+  },
+  "kubernetes": {
+    "enabled": true
+  },
+  "flux": {
+    "enabled": true
+  },
+  "registryAliases": {
+    "lscr.io": "ghcr.io"
+  },
+  "automerge": false,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "commitMessagePrefix": "chore(deps): ",
+  "ignoreDeps": [],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/vendor/**"
+  ],
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday"
+  ],
+  "timezone": "Etc/UTC",
+  "packageRules": [
+    {
+      "description": "linuxserver images: only track clean X.Y.Z short tags, ignore full build tags like 1.43.0.10492-121068a07-ls294",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^(lscr\\.io/linuxserver|linuxserver)/"],
+      "versioning": "semver",
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/"
+    },
+    {
+      "description": "profilarr uses v-prefixed semver tags",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["santiagosayshey/profilarr"],
+      "versioning": "semver"
+    },
+    {
+      "description": "pulsarr: only track stable releases, ignore -beta and -node tags",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["lakker/pulsarr"],
+      "versioning": "semver",
+      "allowedVersions": "!/beta|node/"
+    },
+    {
+      "description": "Auto-merge minor and patch updates for non-critical dependencies",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": false,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Require manual approval for major version bumps",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Group Flux updates together",
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackagePatterns": [
+        "^flux"
+      ],
+      "groupName": "flux-updates",
+      "automerge": false
+    },
+    {
+      "description": "Group Longhorn updates",
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackagePatterns": [
+        "^longhorn"
+      ],
+      "groupName": "longhorn-updates",
+      "automerge": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": [
+      "security"
+    ],
+    "assignees": [
+      "@cmpetersen5551"
+    ]
+  },
+  "postUpdateOptions": [
+    "gomodTidy",
+    "yarnDedupeModules",
+    "npmDedupe"
+  ]
+}
