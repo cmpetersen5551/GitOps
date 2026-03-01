@@ -11,6 +11,9 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   storageClassName: nfs-unraid
+  claimRef:
+    namespace: media
+    name: pvc-media-nfs
   mountOptions:
     - hard                # Retry indefinitely instead of failing
     - retrans=3           # Number of retransmit timeouts
