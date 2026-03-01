@@ -2,7 +2,7 @@
 
 ## Rules
 
-1. **Always Flux** — commit + push, never `kubectl apply`. Force sync: `flux reconcile kustomization apps --with-source`
+1. **Always Flux** — commit + push, never `kubectl apply`. Force sync infrastructure: `flux reconcile kustomization infrastructure --with-source`, or both (apps+infra): `flux reconcile kustomization homelab --with-source`
 2. **No credentials/usernames/IPs in this repo** — stored in personal AI memory only
 3. **New workloads**: use `longhorn-simple` StorageClass, copy affinity/tolerations from `clusters/homelab/apps/media/sonarr/statefulset.yaml`
 
