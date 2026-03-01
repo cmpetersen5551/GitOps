@@ -5,7 +5,7 @@ namespace: live
 
 resources:
   - secret.enc.yaml
-  - deployment.yaml
+  - statefulset.yaml
   - service.yaml
   - service-headless.yaml
   - ingress.yaml
