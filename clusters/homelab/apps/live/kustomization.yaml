@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - ./nfs
   - ./channels-dvr
   - ./pluto-for-channels
   - ./eplustv

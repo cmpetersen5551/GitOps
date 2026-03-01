@@ -25,8 +25,9 @@ spec:
         - name: config
           persistentVolumeClaim:
             claimName: config-channels-dvr
-        # TODO: Add a recordings PVC in the live namespace when storage strategy is decided.
-        # pvc-media-nfs only exists in the media namespace (PVCs are namespace-scoped).
+        - name: media
+          persistentVolumeClaim:
+            claimName: pvc-media-nfs
       containers:
         - name: channels-dvr
           image: fancybits/channels-dvr:latest
@@ -63,6 +64,8 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /channels-dvr
+            - name: media
+              mountPath: /mnt/media
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
