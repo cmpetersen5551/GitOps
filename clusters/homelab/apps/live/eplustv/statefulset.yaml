@@ -31,26 +31,8 @@ spec:
           env:
             - name: TZ
               value: "America/Chicago"
-            - name: ESPN_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: eplustv-secrets
-                  key: espn_username
-            - name: ESPN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: eplustv-secrets
-                  key: espn_password
-            - name: FLOSPORTS_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: eplustv-secrets
-                  key: flosports_username
-            - name: FLOSPORTS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: eplustv-secrets
-                  key: flosports_password
+            # Note: eplustv credentials are configured via web UI, not env vars.
+            # Supported env vars: BASE_URL, PUID, PGID, PORT only.
           resources:
             requests:
               cpu: 200m
@@ -76,7 +58,7 @@ spec:
             failureThreshold: 3
           volumeMounts:
             - name: config
-              mountPath: /app/data
+              mountPath: /app/config
   volumeClaimTemplates:
     - metadata:
         name: config

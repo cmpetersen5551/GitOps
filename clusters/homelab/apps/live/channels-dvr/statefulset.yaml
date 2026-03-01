@@ -25,9 +25,8 @@ spec:
         - name: config
           persistentVolumeClaim:
             claimName: config-channels-dvr
-        - name: recordings
-          persistentVolumeClaim:
-            claimName: pvc-media-nfs  # Shared media library for recordings
+        # TODO: Add a recordings PVC in the live namespace when storage strategy is decided.
+        # pvc-media-nfs only exists in the media namespace (PVCs are namespace-scoped).
       containers:
         - name: channels-dvr
           image: fancybits/channels-dvr:latest
@@ -47,7 +46,7 @@ spec:
               memory: 4Gi
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 8089
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -55,7 +54,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 8089
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -63,9 +62,7 @@ spec:
             failureThreshold: 3
           volumeMounts:
             - name: config
-              mountPath: /opt/channels
-            - name: recordings
-              mountPath: /mnt/recordings
+              mountPath: /channels-dvr
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

@@ -56,7 +56,7 @@ spec:
             failureThreshold: 3
           volumeMounts:
             - name: data
-              mountPath: /data
+              mountPath: /app/data
   volumeClaimTemplates:
     - metadata:
         name: data
