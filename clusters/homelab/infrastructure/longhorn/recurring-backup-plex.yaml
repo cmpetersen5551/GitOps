@@ -4,6 +4,7 @@ metadata:
   name: plex-config-daily-backup
   namespace: longhorn-system
 spec:
+  name: plex-config-daily-backup
   cron: "0 3 * * *"   # 3:00 AM daily
   task: backup
   groups: []
