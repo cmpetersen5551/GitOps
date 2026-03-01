@@ -14,14 +14,14 @@ resources:
   - ./pulsarr
 
 patches:
-  - path: patches/ha-affinity.yaml
+  - path: ../patches/ha-affinity.yaml
     target:
       kind: StatefulSet
       name: "(sonarr|radarr|prowlarr|profilarr|decypharr|pulsarr)"
-  - path: patches/statefulset-strategy.yaml
+  - path: ../patches/statefulset-strategy.yaml
     target:
       kind: StatefulSet
-  - path: patches/disable-service-links.yaml
+  - path: ../patches/disable-service-links.yaml
     target:
       kind: StatefulSet
 

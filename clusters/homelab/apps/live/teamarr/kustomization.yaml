@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: live
 
 resources:
-  - pvc-data.yaml
   - deployment.yaml
   - service.yaml
+  - service-headless.yaml
   - ingress.yaml

@@ -1,5 +1,5 @@
 # HA node affinity + tolerations — applied to all StatefulSets via kustomization target patch.
-# Edit here to change placement policy for every media workload at once.
+# Edit here to change placement policy for every StatefulSet across media and live namespaces.
 # See docs/DECISIONS.md for the active-passive HA strategy rationale.
 apiVersion: apps/v1
 kind: StatefulSet

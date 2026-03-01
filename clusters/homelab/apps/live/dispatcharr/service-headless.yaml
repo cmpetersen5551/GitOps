@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dispatcharr-headless
+  namespace: live
+  labels:
+    app: dispatcharr
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless
+  selector:
+    app: dispatcharr
+  ports:
+    - port: 9191
+      targetPort: 9191
+      protocol: TCP
+      name: http

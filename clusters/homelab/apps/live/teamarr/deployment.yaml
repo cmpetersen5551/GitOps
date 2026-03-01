@@ -1,20 +1,16 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: teamarr
   namespace: live
   labels:
     app: teamarr
 spec:
+  serviceName: teamarr-headless
   replicas: 1
   selector:
     matchLabels:
       app: teamarr
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -25,10 +21,6 @@ spec:
         fsGroup: 1000
         runAsNonRoot: false
         runAsUser: 0
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: data-teamarr
       containers:
         - name: teamarr
           image: ghcr.io/pharaoh-labs/teamarr:latest
@@ -65,33 +57,15 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node.longhorn.io/storage
-                    operator: In
-                    values:
-                      - enabled
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - key: node.longhorn.io/primary
-                    operator: In
-                    values:
-                      - "true"
-      tolerations:
-        - key: node.longhorn.io/storage
-          operator: Equal
-          value: enabled
-          effect: NoSchedule
-        - key: node.kubernetes.io/unreachable
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
-        - key: node.kubernetes.io/not-ready
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: teamarr
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-simple
+        resources:
+          requests:
+            storage: 5Gi
