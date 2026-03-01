@@ -2,7 +2,7 @@
 
 ## Rules
 
-1. **Always Flux** — commit + push, never `kubectl apply`. Force sync infrastructure: `flux reconcile kustomization infrastructure --with-source`, or both (apps+infra): `flux reconcile kustomization homelab --with-source`
+1. **Always Flux** — commit + push, never `kubectl apply`. Force sync: apps: `flux reconcile kustomization apps --with-source`, infra: `flux reconcile kustomization infrastructure --with-source`, everything: `flux reconcile kustomization flux-system --with-source`
 2. **No credentials/usernames/IPs in this repo** — stored in personal AI memory only
 3. **New workloads**: use `longhorn-simple` StorageClass, copy affinity/tolerations from `clusters/homelab/apps/media/sonarr/statefulset.yaml`
 
@@ -20,8 +20,9 @@
 
 | Doc | What's in it |
 |-----|-------------|
-| `docs/STATE.md` | Current nodes, pods, PVCs, infra |
-| `docs/DECISIONS.md` | HA strategy, DFS arch, storage choices + rejected alternatives + node setup runbook |
-| `docs/GOTCHAS.md` | Symptom → root cause → fix index |
+| `docs/STATE.md` | Current nodes, pods, PVCs, infra, ingress routes, tooling |
+| `docs/DECISIONS.md` | HA strategy, DFS arch, storage choices, victoria-logs arch + rejected alternatives + node setup runbook |
+| `docs/GOTCHAS.md` | Symptom → root cause → fix index (includes VictoriaLogs API gotchas) |
+| `docs/vlogs-troubleshoot.sh` | Query Victoria Logs from macOS (`./docs/vlogs-troubleshoot.sh help`) |
 
-**Last Updated**: 2026-02-28
+**Last Updated**: 2026-03-01
