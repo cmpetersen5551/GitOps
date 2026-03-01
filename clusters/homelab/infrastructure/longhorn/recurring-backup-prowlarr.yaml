@@ -7,7 +7,7 @@ spec:
   name: prowlarr-config-daily-backup
   cron: "0 3 * * *"   # 3:00 AM daily
   task: backup
-  groups: []
+  groups: ["default"]
   retain: 7            # Keep 7 daily backups
   concurrency: 1
   labels:
