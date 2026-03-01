@@ -23,3 +23,6 @@ data:
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
   EAE_SUPPORT: "1"
+  # Inject -hwaccel vaapi for hardware decode. Hardware encode (h264_vaapi) is driven
+  # by PMS Preferences.xml HardwareAcceleratedCodecs=1 — set directly in the PVC.
+  FFMPEG_HWACCEL: vaapi
