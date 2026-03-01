@@ -84,5 +84,4 @@
 
 ## Pending (Not Yet Deployed)
 
-- Phase 6: Quality profiles via Profilarr/TRaSH Guides sync
 - Phase 8: Pulsarr (Plex watchlist → Sonarr/Radarr auto-request)
