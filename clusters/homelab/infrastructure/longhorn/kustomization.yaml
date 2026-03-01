@@ -9,8 +9,4 @@ resources:
   - storageclass-simple.yaml  # Custom StorageClass without node selectors
   - storageclass-rwx.yaml  # RWX StorageClass for shared media libraries (NFSv4)
   - ingress.yaml
-  - recurring-backup-plex.yaml
-  - recurring-backup-sonarr.yaml
-  - recurring-backup-radarr.yaml
-  - recurring-backup-prowlarr.yaml
-  - recurring-backup-profilarr.yaml
+  - recurring-backup-all.yaml  # Backs up all volumes in default group (daily 3 AM, 7-day retention)
