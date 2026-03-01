@@ -36,26 +36,3 @@ spec:
         limits:
           memory: 1Gi
           cpu: 500m
-  
-  postRenderers:
-    - kustomize:
-        patchesStrategicMerge:
-          - apiVersion: apps/v1
-            kind: StatefulSet
-            metadata:
-              name: victoria-logs-victoria-logs-single-server
-              namespace: victoria-logs
-            spec:
-              template:
-                spec:
-                  nodeSelector:
-                    node.longhorn.io/create-default-disk: "true"
-                  affinity:
-                    nodeAffinity:
-                      preferredDuringSchedulingIgnoredDuringExecution:
-                        - weight: 100
-                          preference:
-                            matchExpressions:
-                              - key: node.longhorn.io/primary
-                                operator: In
-                                values: ["true"]
