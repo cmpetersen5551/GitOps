@@ -10,7 +10,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: logs.homelab
+    - host: victoria-logs.homelab
       http:
         paths:
           - path: /
