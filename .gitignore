@@ -1,6 +1,9 @@
 # SOPS age key
 age.key
 
+# Plaintext secrets (encrypt before committing)
+secret.yaml
+
 # Decrypted files (for local review)
 *.dec.yaml
 *.decrypted.yaml
