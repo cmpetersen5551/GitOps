@@ -87,6 +87,40 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 
 ---
 
+## Live TV Stack (live namespace)
+
+### pluto-for-channels container port is 80, not 8080
+- **Symptom**: Service targets port 8080, pod never becomes healthy; container serves HTTP on port 80
+- **Cause**: The `jonmaddox/pluto-for-channels` image listens on port 80. Service was incorrectly configured with `targetPort: 8080`.
+- **Fix**: `containerPort: 80`, health probes on port 80. Service `port: 8080` → `targetPort: 80` (service port is an external convention; container port is 80)
+
+### eplustv volume mount path is /app/config, not /app/data
+- **Symptom**: Config doesn't persist across pod restarts; PVC mounted at wrong path
+- **Cause**: `tonywagner/eplustv` stores config at `/app/config`, not `/app/data`
+- **Fix**: Volume mount `mountPath: /app/config`
+
+### teamarr volume mount path is /app/data, not /data
+- **Symptom**: Config doesn't persist across pod restarts
+- **Cause**: `ghcr.io/pharaoh-labs/teamarr` stores data at `/app/data`, not `/data`
+- **Fix**: Volume mount `mountPath: /app/data`
+
+### channels-dvr config path is /channels-dvr, not /opt/channels
+- **Symptom**: Config doesn't persist; PVC mounted at wrong path
+- **Cause**: `fancybits/channels-dvr` uses `/channels-dvr` as the config directory
+- **Fix**: Volume mount `mountPath: /channels-dvr`; health probe HTTP GET `/api/v1/status` on port 8089
+
+### dispatcharr health probes always return 401
+- **Symptom**: Pod fails liveness/readiness probes; all health endpoints require authentication
+- **Cause**: All dispatcharr endpoints (including `/-/healthz`) return 401 until UI auth is configured post-first-boot
+- **Fix**: Remove all health probes from dispatcharr pod spec; process lifecycle management is sufficient
+
+### channels-dvr NFS PVC cross-namespace error
+- **Symptom**: PVC binds to wrong PV or stays Pending; PV already claimed by media namespace
+- **Cause**: Kubernetes PVCs are namespace-scoped; a PVC in `live` cannot claim a PV that was pre-bound to `media`
+- **Fix**: Create a separate PV (`pv-nfs-media-live`) for the `live` namespace with `claimRef.namespace: live`. Create matching PVC in `live` namespace. Both NFS PVs must use `claimRef` to prevent accidental cross-namespace binding.
+
+---
+
 ## Victoria Logs
 
 ### Pod won't schedule (nodeSelector/tolerations ignored)

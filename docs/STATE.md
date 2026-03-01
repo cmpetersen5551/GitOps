@@ -36,6 +36,18 @@
 
 ---
 
+## Running Pods (live namespace)
+
+| Pod | Node | Image | PVC |
+|-----|------|-------|-----|
+| channels-dvr-0 | k3s-w1 | fancybits/channels-dvr:latest | config-channels-dvr-0 (5Gi RWO), pvc-media-nfs (NFS recordings) |
+| dispatcharr-0 | k3s-w1 | ghcr.io/dispatcharr/dispatcharr:v0.20.1 | config-dispatcharr-0 (2Gi RWO) |
+| eplustv-0 | k3s-w1 | tonywagner/eplustv:v4.15.0 | config-eplustv-0 (1Gi RWO) |
+| pluto-for-channels | k3s-w1 | jonmaddox/pluto-for-channels:2.0.2 | — (stateless) |
+| teamarr-0 | k3s-w1 | ghcr.io/pharaoh-labs/teamarr:v2.2.2 | config-teamarr-0 (2Gi RWO) |
+
+---
+
 ## PVC Inventory
 
 | PVC | Capacity | Class | Used By |
@@ -53,6 +65,11 @@
 | pvc-nfs-streaming-media | — | static NFS | plex-0 (/mnt/streaming-media via share-manager NFSv4) |
 | pvc-nfs-dfs | — | static NFS | plex-0 (/mnt/dfs via NFS server pod) |
 | data-pulsarr-0 | 1Gi | longhorn-simple (RWO) | pulsarr (SQLite DB + config) |
+| config-channels-dvr-0 | 5Gi | longhorn-simple (RWO) | channels-dvr (config + recordings DB) |
+| config-dispatcharr-0 | 2Gi | longhorn-simple (RWO) | dispatcharr |
+| config-eplustv-0 | 1Gi | longhorn-simple (RWO) | eplustv |
+| config-teamarr-0 | 2Gi | longhorn-simple (RWO) | teamarr |
+| pvc-media-nfs (live) | 1Ti | nfs-unraid (RWX) | channels-dvr (Unraid media — recordings) |
 
 ---
 
@@ -84,6 +101,8 @@
 - `pv-nfs-media` → claimed by `pvc-media-nfs` (media namespace) → sonarr, radarr, plex
 - `pv-nfs-media-live` → claimed by `pvc-media-nfs` (live namespace) → channels-dvr recordings
 
+**Note**: Each namespace that needs Unraid NFS access requires its own PV (with `claimRef` locking it to the namespace) and its own PVC. PVCs cannot cross namespaces.
+
 **Mount examples** (Proxmox / other hosts):
 ```bash
 mkdir -p /mnt/unraid/media /mnt/unraid/transcode
@@ -106,6 +125,11 @@ mount -t nfs 192.168.1.29:/mnt/user/transcode /mnt/unraid/transcode
 | http://plex.homelab | plex | 32400 |
 | http://longhorn.homelab | longhorn-ui | — |
 | http://pulsarr.homelab | pulsarr | 3003 || http://logs.homelab | victoria-logs (VMUI + API) | 9428 |
+| http://channels.homelab | channels-dvr | 8089 |
+| http://dispatcharr.homelab | dispatcharr | 9191 |
+| http://eplustv.homelab | eplustv | 8080 |
+| http://pluto.homelab | pluto-for-channels | 8080 |
+| http://teamarr.homelab | teamarr | 9195 |
 
 ---
 
@@ -139,3 +163,5 @@ Default URL: `http://logs.homelab` (auto-falls back to `kubectl port-forward -n 
 - Phase 1.1: Longhorn recurring backups — `backup-all-volumes` RecurringJob
 - Phase 1.2: Renovate — automated Helm + container update PRs
 - Phase 2.1: VictoriaLogs — centralized logging, Vector DaemonSet, `http://logs.homelab`
+- Live TV namespace (`live`) — channels-dvr, dispatcharr, eplustv, pluto-for-channels, teamarr. All images pinned to stable versions; all manifests externally verified (ports, health probes, env vars, volume mounts). NFS access added for channels-dvr recordings via `pv-nfs-media-live` + `pvc-media-nfs` in `live` namespace.
+- NFS PV pattern hardened — both `pv-nfs-media` and `pv-nfs-media-live` now use `claimRef` to prevent accidental binding to the wrong namespace PVC.

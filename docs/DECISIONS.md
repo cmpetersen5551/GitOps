@@ -225,6 +225,35 @@ Official image. `ghcr.io/cowboy/decypharr` and `sirrobot01/decypharr` are wrong/
 
 ---
 
+## Live TV Stack (live namespace)
+
+**Chosen**: Dedicated `live` namespace with channels-dvr, dispatcharr, eplustv, pluto-for-channels, teamarr (2026-03-01)
+
+**Services**:
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| channels-dvr | fancybits/channels-dvr:latest | 8089 | DVR backend — HDHR + virtual tuner aggregation |
+| dispatcharr | ghcr.io/dispatcharr/dispatcharr:v0.20.1 | 9191 | M3U/EPG playlist management |
+| eplustv | tonywagner/eplustv:v4.15.0 | 8080 | ESPN+ virtual tuner for channels-dvr |
+| pluto-for-channels | jonmaddox/pluto-for-channels:2.0.2 | 80 | Pluto TV virtual tuner for channels-dvr |
+| teamarr | ghcr.io/pharaoh-labs/teamarr:v2.2.2 | 9195 | Sports schedule/calendar |
+
+**NFS access for channels-dvr recordings**:
+- Required separate PV (`pv-nfs-media-live`) + PVC (`pvc-media-nfs` in `live` namespace) — PVCs cannot cross namespaces
+- Both NFS PVs (`pv-nfs-media` and `pv-nfs-media-live`) use `claimRef` to prevent accidental binding to wrong namespace
+- channels-dvr mounts recordings NFS at `/shares/Media` (its native recording path)
+
+**Health probes**:
+- dispatcharr: No health probes — all endpoints return 401 until UI auth setup (same as Decypharr)
+- channels-dvr: HTTP GET `/api/v1/status` on port 8089 — verified working pre-auth
+- eplustv, pluto-for-channels, teamarr: HTTP probes on native port
+
+**Image pinning approach**:
+- All images pinned to specific tags except `channels-dvr` (no stable semver tags; `:latest` is the only meaningful tag in this repo)
+- Renovate will detect and PR updates for pinned tags automatically
+
+---
+
 ## Traefik / Ingress
 
 **Service port convention**: All app Services expose port `80` externally, map to app's native port via targetPort.  
