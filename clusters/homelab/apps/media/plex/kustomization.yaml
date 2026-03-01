@@ -3,20 +3,20 @@ kind: Kustomization
 resources:
   # ConfigMap
   - configmap.yaml
-  # Storage - config (Longhorn RWX via share-manager NFSv4 for w3)
+  # Storage - config (Longhorn RWX via share-manager NFSv4, accessed by both storage nodes + GPU nodes)
   - pvc-plex-config.yaml
-  - pv-plex-config-w3.yaml
-  - pvc-plex-config-w3.yaml
+  - pv-nfs-plex-config.yaml
+  - pvc-nfs-plex-config.yaml
   - plex-config-holder.yaml   # Keeps the Longhorn share-manager alive (CSI consumer on w1/w2)
-  # Storage - media (Unraid NFS, static for w3)
-  - pv-nfs-media-w3.yaml
-  - pvc-nfs-media-w3.yaml
-  # Storage - streaming media (Longhorn RWX share-manager, static for w3)
-  - pv-streaming-media-w3.yaml
-  - pvc-streaming-media-w3.yaml
-  # Storage - DFS FUSE re-export (NFS server pod on w1/w2; w3 mounts via static NFS PV)
-  - pv-plex-dfs-nfs.yaml
-  - pvc-plex-dfs-nfs.yaml
+  # Storage - media (Unraid NFS, static NFS wrappers for any node needing it)
+  - pv-nfs-media.yaml
+  - pvc-nfs-media.yaml
+  # Storage - streaming media (Longhorn RWX share-manager, static NFS wrappers for GPU nodes)
+  - pv-nfs-streaming-media.yaml
+  - pvc-nfs-streaming-media.yaml
+  # Storage - DFS FUSE re-export (NFS server pod on w1/w2; GPU nodes mount via static NFS PV)
+  - pv-nfs-dfs.yaml
+  - pvc-nfs-dfs.yaml
   - service-plex-nfs-server.yaml
   - nfs-server-deployment.yaml
   # Plex

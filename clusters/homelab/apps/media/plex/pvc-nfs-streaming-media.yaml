@@ -1,16 +1,15 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: plex-dfs-nfs
+  name: pvc-nfs-streaming-media
   namespace: media
   labels:
-    app.kubernetes.io/name: plex-dfs-nfs
     app.kubernetes.io/part-of: plex
 spec:
-  volumeName: plex-dfs-nfs-pv
   accessModes:
     - ReadWriteMany
-  storageClassName: ""  # Manual binding to PV
+  storageClassName: ""
+  volumeName: pv-nfs-streaming-media
   resources:
     requests:
-      storage: 100Gi
+      storage: 10Gi

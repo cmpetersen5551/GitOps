@@ -44,18 +44,19 @@ SQLite-over-NFS risk: Acceptable for single-writer, single-pod homelab use. NFSv
 ### Kept / Moved
 | Component | New Home | Reason |
 |---|---|---|
-| NFS server pod + service | `plex/` | Still needed: re-exports host `/mnt/dfs` FUSE for w3 Plex |
-| `pv-dfs-nfs` / `pvc-dfs-nfs` | `plex/` | Still needed: DFS access for Plex |
-| `pv-nfs-media-w3` / `pvc-nfs-media-w3` | `plex/` | Unraid media library for Plex on w3 |
-| `pv-streaming-media-w3` / `pvc-streaming-media-w3` | `plex/` | Streaming media (symlinks → /mnt/dfs) for Plex on w3 |
+| NFS server pod + service | `plex/` | Still needed: re-exports host `/mnt/dfs` FUSE for GPU nodes |
+| `pv-nfs-dfs` / `pvc-nfs-dfs` | `plex/` | Still needed: DFS access for Plex |
+| `pv-nfs-media` / `pvc-nfs-media` | `plex/` | Unraid media library (RWX) — generic, any GPU node can claim it |
+| `pv-nfs-streaming-media` / `pvc-nfs-streaming-media` | `plex/` | Streaming media (RWX via Longhorn share-manager) — generic for GPU failover |
 | Ingress (plex.homelab → plex on port 32400) | `plex/` | Identical, just updated service name |
 
 ### New
 | Component | Details |
 |---|---|
 | `pvc-plex-config` | Longhorn RWX, 10Gi (confirmed: existing Plex config is ~6GB) |
-| `pv-plex-config-w3` / `pvc-plex-config-w3` | Static NFS PV pointing to share-manager for above |
-| `plex/statefulset.yaml` | Normal plex on w3 (gpu=true required affinity) |
+| `pv-nfs-plex-config` / `pvc-nfs-plex-config` | Static NFS PV wrapper for share-manager (Longhorn RWX config) — generic naming for GPU failover |
+| `plex-config-holder.yaml` | Deployment on w1/w2 that holds a CSI mount to `pvc-plex-config` to keep the Longhorn share-manager alive when only w3 (NFS-mounting) consumes the volume |
+| `plex/statefulset.yaml` | Normal plex on GPU node (gpu=true required affinity) — reschedules to any GPU-labeled node without code changes |
 | `plex/configmap.yaml` | Simplified env (no ClusterPlex mods) |
 | `infrastructure/longhorn/recurring-backup-plex.yaml` | Longhorn RecurringJob (nightly block backup) |
 | `infrastructure/longhorn/ingress.yaml` | Expose Longhorn UI at longhorn.homelab |
@@ -78,7 +79,50 @@ SQLite-over-NFS risk: Acceptable for single-writer, single-pod homelab use. NFSv
 
 ---
 
-## Phase 0: Pre-Flight
+## GPU Node Failover Strategy (Generic Naming)
+
+When you add a second GPU node (w4, w5, etc.), **zero new YAML files are needed.** This is because all storage references use generic names, not node-specific suffixes:
+
+### How It Works
+
+| File | Type | Why It's Generic |
+|------|------|---|
+| `pvc-nfs-plex-config` | Static NFS PVC | Bound to `pv-nfs-plex-config`, which points to Longhorn's share-manager ClusterIP (stable across any node) |
+| `pvc-nfs-media` | Static NFS PVC | Bound to `pv-nfs-media`, which points to Unraid NFS (accessible from any node) |
+| `pvc-nfs-streaming-media` | Static NFS PVC | Bound to `pv-nfs-streaming-media`, which points to Longhorn's share-manager (stable across any node) |
+| `statefulset.yaml` | Pod affinity | Uses `gpu=true` nodeAffinity — reschedules to any GPU-labeled node without code edits |
+
+**Future scenario: w4 joins with `gpu=true` label**
+1. Label w4: `kubectl label nodes w4 gpu=true`
+2. Update `plex-config-holder.yaml` to add w4 to its storage node affinity (or keep as-is if you want holder on w1 only)
+3. Plex StatefulSet automatically reschedules to w4 on next pod restart — mount points stay the same, NFS targets don't change
+4. Profit! Zero new PVC/PV manifests
+
+### Why Not Just Use the Dynamic PVCs Directly?
+
+(For the config + streaming volumes that are Longhorn RWX on w1/w2)
+
+w3/w4 are **LXC on Proxmox VE** and cannot use Longhorn's iSCSI CSI driver (block device cgroups forbidden). The only way for w3/w4 to access Longhorn RWX volumes is through the share-manager's NFSv4 export, which requires static PVs.
+
+Could you mount the dynamic RWX PVCs from w1/w2 storage nodes and re-export them via CIFS/NFS? Yes, but that's building a second orchestrator. The static NFS PV approach is simpler and proven to work.
+
+### plex-config-holder Explained
+
+The `plex-config-holder` Deployment runs a dummy pod on w1/w2 that holds a CSI mount to `pvc-plex-config` (the dynamic Longhorn RWX volume). Why? Because:
+
+- Longhorn's share-manager pod only starts when **at least one CSI consumer** is mounted
+- Plex on w3 uses a **static NFS PV**, not CSI (LXC limitation)
+- Without holder, Longhorn sees "no CSI mounts" → shuts down share-manager → NFS goes down → Plex loses /config
+
+The holder pod prevents this by maintaining a CSI presence. It's a 1-replica dummy Deployment with a PVC mount — runs on w1/w2 (storage node affinity), no container actually uses the mount, but Kubernetes keeps it bound.
+
+If you want to reduce moving parts, you could alternatively:
+- Run the Plex pod itself on w1/w2 (via CSI) — but then you lose hardware acceleration if w1/w2 don't have GPUs
+- Use a StatefulSet on w1/w2 as the holder — but pod replica sync is not necessary (a Deployment is fine)
+
+The current design (holder + w3 Plex) is the cleanest split of concerns.
+
+---
 
 ### 0.1 Confirm Unraid backup share is NFS-exportable
 The `longhorn_backup` share exists on Unraid with NFS enabled. Confirm it is accessible:
@@ -214,14 +258,14 @@ Note down:
 - **ClusterIP**: `10.43.X.X`
 - **PVC path**: `/pvc-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX` (the volume name)
 
-### 2.4 Create the static PV for w3 access
-Create `clusters/homelab/apps/media/plex/pv-plex-config-w3.yaml`:
+### 2.4 Create the static NFS PVs for GPU node access
+Create `clusters/homelab/apps/media/plex/pv-nfs-plex-config.yaml`:
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: pv-plex-config-w3
+  name: pv-nfs-plex-config
 spec:
   capacity:
     storage: 50Gi
@@ -231,7 +275,7 @@ spec:
   storageClassName: ""
   claimRef:
     namespace: media
-    name: pvc-plex-config-w3
+    name: pvc-nfs-plex-config
   # Points to the Longhorn share-manager NFSv4 export for pvc-plex-config.
   # ClusterIP is stable until the Longhorn service is deleted.
   # If pvc-plex-config is ever deleted and recreated, update server and path below.
@@ -246,19 +290,19 @@ spec:
     path: /pvc-XXXXXXXX-...    # ← Fill in from Phase 2.3
 ```
 
-Create `clusters/homelab/apps/media/plex/pvc-plex-config-w3.yaml`:
+Create `clusters/homelab/apps/media/plex/pvc-nfs-plex-config.yaml`:
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-plex-config-w3
+  name: pvc-nfs-plex-config
   namespace: media
 spec:
   accessModes:
     - ReadWriteMany
   storageClassName: ""
-  volumeName: pv-plex-config-w3
+  volumeName: pv-nfs-plex-config
   resources:
     requests:
       storage: 10Gi
@@ -268,7 +312,7 @@ spec:
 
 ## Phase 3: Fresh Start — No Migration Needed
 
-The existing `clusterplex-pms-config` PVC does not need to be migrated. Plex will initialise a clean config directory on first boot into `pvc-plex-config-w3`. After Plex starts:
+The existing `clusterplex-pms-config` PVC does not need to be migrated. Plex will initialise a clean config directory on first boot into `pvc-nfs-plex-config`. After Plex starts:
 1. Sign in with your Plex account via the UI
 2. Add media libraries pointing at `/mnt/media`, `/mnt/streaming-media`, `/mnt/dfs`
 3. Let Plex scan — it rebuilds metadata automatically
@@ -413,16 +457,17 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: pvc-plex-config-w3    # Static NFS PV → Longhorn share-manager
+            claimName: pvc-nfs-plex-config    # Static NFS PV → Longhorn share-manager (NFSv4)
         - name: media-nfs
           persistentVolumeClaim:
-            claimName: pvc-nfs-media-w3      # Static NFS PV → Unraid /mnt/user/media
+            claimName: pvc-nfs-media      # Static NFS PV → Unraid /mnt/user/media
         - name: streaming-media
           persistentVolumeClaim:
+            claimName: pvc-nfs-streaming-media  # Static NFS PV → Longhorn share-manager
             claimName: pvc-streaming-media-w3  # Static NFS PV → Longhorn share-manager
         - name: dfs
           persistentVolumeClaim:
-            claimName: plex-dfs-nfs          # Static NFS PV → NFS server pod (re-exports /mnt/dfs FUSE)
+            claimName: pvc-nfs-dfs          # Static NFS PV → NFS server pod (re-exports /mnt/dfs FUSE)
         # No transcode volume — Plex writes transcode buffers to container overlay fs
 ```
 
@@ -510,14 +555,14 @@ spec:
 Move from `clusterplex/` to `plex/`:
 - `nfs-server-deployment.yaml` → update label `app.kubernetes.io/name: clusterplex-nfs-server` to `plex-nfs-server`, update pod label prefix
 - `service-nfs-server.yaml` → rename to `service-plex-nfs-server.yaml`, update selector label to `app.kubernetes.io/name: plex-nfs-server`, service name becomes `plex-nfs-server`
-- `pv-plex-dfs-nfs.yaml`, update label to `app.kubernetes.io/part-of: plex`
-- `pvc-plex-dfs-nfs.yaml`, claimName `plex-dfs-nfs` (matches updated PV)
-- `pv-nfs-media-w3.yaml` (unchanged — labels are informational only)
-- `pvc-nfs-media-w3.yaml` (unchanged)
-- `pv-streaming-media-w3.yaml` (unchanged)
-- `pvc-streaming-media-w3.yaml` (unchanged)
+- `pv-nfs-dfs.yaml`, update label to `app.kubernetes.io/part-of: plex`
+- `pvc-nfs-dfs.yaml`, claimName `pvc-nfs-dfs` (matches updated PV)
+- `pv-nfs-media.yaml` (renamed from `pv-nfs-media-w3.yaml` — now generic for any GPU node)
+- `pvc-nfs-media.yaml` (renamed from `pvc-nfs-media-w3.yaml` — now generic for any GPU node)
+- `pv-nfs-streaming-media.yaml` (renamed from `pv-streaming-media-w3.yaml` — now generic for any GPU node)
+- `pvc-nfs-streaming-media.yaml` (renamed from `pvc-streaming-media-w3.yaml` — now generic for any GPU node)
 
-**Important**: When you rename `service-nfs-server` to `service-plex-nfs-server`, the Service's ClusterIP will change. After the service is deployed, find its new ClusterIP and update `pv-plex-dfs-nfs.yaml`'s NFS server field:
+**Important**: When you rename `service-nfs-server` to `service-plex-nfs-server`, the Service's ClusterIP will change. After the service is deployed, find its new ClusterIP and update `pv-nfs-dfs.yaml`'s NFS server field:
 ```bash
 kubectl get svc -n media plex-nfs-server -o jsonpath='{.spec.clusterIP}'
 ```
@@ -528,21 +573,22 @@ kubectl get svc -n media plex-nfs-server -o jsonpath='{.spec.clusterIP}'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Config
+  # ConfigMap
   - configmap.yaml
-  # Storage - config (Longhorn RWX via share-manager)
+  # Storage - config (Longhorn RWX via share-manager NFSv4, accessed by both storage nodes + GPU nodes)
   - pvc-plex-config.yaml
-  - pv-plex-config-w3.yaml
-  - pvc-plex-config-w3.yaml
-  # Storage - media (Unraid NFS, static for w3)
-  - pv-nfs-media-w3.yaml
-  - pvc-nfs-media-w3.yaml
-  # Storage - streaming media (Longhorn RWX share-manager, static for w3)
-  - pv-streaming-media-w3.yaml
-  - pvc-streaming-media-w3.yaml
+  - pv-nfs-plex-config.yaml
+  - pvc-nfs-plex-config.yaml
+  - plex-config-holder.yaml   # Keeps the Longhorn share-manager alive (CSI consumer on w1/w2)
+  # Storage - media (Unraid NFS, static NFS wrappers for any node needing it)
+  - pv-nfs-media.yaml
+  - pvc-nfs-media.yaml
+  # Storage - streaming media (Longhorn RWX share-manager, static NFS wrappers for GPU nodes)
+  - pv-nfs-streaming-media.yaml
+  - pvc-nfs-streaming-media.yaml
   # Storage - DFS FUSE re-export (NFS server pod)
-  - pv-plex-dfs-nfs.yaml
-  - pvc-plex-dfs-nfs.yaml
+  - pv-nfs-dfs.yaml
+  - pvc-nfs-dfs.yaml
   - service-plex-nfs-server.yaml
   - nfs-server-deployment.yaml
   # Plex
@@ -755,8 +801,8 @@ This is documented in the restore runbook below as the "fast path" for DB corrup
    - Backups → select the most recent backup before the corruption event
    - Click "Restore" → name the new PVC (e.g., `pvc-plex-config-restored`)
    - Wait for restore to complete
-   - Update `pv-plex-config-w3.yaml` to point to the new volume's share-manager ClusterIP + path (same process as Phase 2.3)
-   - Delete old `pvc-plex-config` and `pvc-plex-config-w3` PVCs/PVs
+   - Update `pv-nfs-plex-config.yaml` to point to the new volume's share-manager ClusterIP + path (same process as Phase 2.3)
+   - Delete old `pvc-plex-config` and `pvc-nfs-plex-config` PVCs/PVs
    - Commit and push
    - Scale Plex back to 1
 
@@ -764,7 +810,7 @@ This is documented in the restore runbook below as the "fast path" for DB corrup
    ```bash
    # Run a rescue pod against the config PVC
    kubectl run plex-rescue --rm -it --image=alpine --restart=Never -n media \
-     --overrides='{ "spec": { <mount pvc-plex-config-w3> } }'
+     --overrides='{ "spec": { <mount pvc-nfs-plex-config> } }'
    
    # Inside rescue pod:
    cd "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/"

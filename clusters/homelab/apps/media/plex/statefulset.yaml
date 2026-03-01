@@ -103,16 +103,16 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: pvc-plex-config-w3    # Static NFS PV → Longhorn share-manager (NFSv4)
+            claimName: pvc-nfs-plex-config    # Static NFS PV → Longhorn share-manager (NFSv4)
         - name: media-nfs
           persistentVolumeClaim:
-            claimName: pvc-nfs-media-w3      # Static NFS PV → Unraid /mnt/user/media
+            claimName: pvc-nfs-media      # Static NFS PV → Unraid /mnt/user/media
         - name: streaming-media
           persistentVolumeClaim:
-            claimName: pvc-streaming-media-w3  # Static NFS PV → Longhorn share-manager
+            claimName: pvc-nfs-streaming-media  # Static NFS PV → Longhorn share-manager
         - name: dfs
           persistentVolumeClaim:
-            claimName: plex-dfs-nfs          # Static NFS PV → NFS server pod (re-exports /mnt/dfs FUSE)
+            claimName: pvc-nfs-dfs          # Static NFS PV → NFS server pod (re-exports /mnt/dfs FUSE)
         - name: dri
           hostPath:
             path: /dev/dri                   # Intel QSV GPU on w3

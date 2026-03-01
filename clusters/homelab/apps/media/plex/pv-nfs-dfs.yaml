@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: plex-dfs-nfs-pv
+  name: pv-nfs-dfs
   labels:
-    app.kubernetes.io/name: plex-dfs-nfs
+    app.kubernetes.io/name: pv-nfs-dfs
     app.kubernetes.io/part-of: plex
 spec:
   capacity:
@@ -14,7 +14,7 @@ spec:
   storageClassName: ""
   claimRef:
     namespace: media
-    name: plex-dfs-nfs
+    name: pvc-nfs-dfs
   nfs:
     server: 10.43.160.244  # ClusterIP of plex-nfs-server svc — pinned, routes to NFS server pod (on w1/w2 for HA)
     path: /                  # NFSv4 root — fsid=0 export IS the /export/dfs directory
