@@ -299,6 +299,15 @@ sonarr-utils migrate-root-folder \
 
 ### 4.1 SOPS + age Secret Management
 
+**Status**: ✅ COMPLETED (2026-03-01)
+
+**What was delivered**:
+- `age-keygen` used to generate keypair; private key stored as `sops-age` secret in `flux-system`
+- `.sops.yaml` at repo root with `creation_rules` targeting `clusters/**/*.yaml` encrypting `data|stringData`
+- `secret.enc.yaml` for pluto-for-channels encrypted and committed; plaintext `secret.yaml` in `.gitignore`
+- Flux `ksops` decryption enabled via `spec.decryption` in flux-system Kustomization
+- Key loss scenario handled: regenerated keypair, re-encrypted all secrets, recreated cluster secret
+
 **Scope**: Enable encrypted secrets in git, Flux-native decryption at deploy time.
 
 **Why now**: Live TV services (pluto-for-channels, EPlusTV, etc.) require storing credentials securely in git. Implement SOPS immediately before deploying them.
@@ -362,6 +371,8 @@ sonarr-utils migrate-root-folder \
 
 ### 5.1 Channels DVR
 
+**Status**: ✅ COMPLETED (2026-03-01)
+
 **Container**: `fancybits/channels-dvr`  
 **Port**: 8089  
 **Storage**:
@@ -387,6 +398,8 @@ sonarr-utils migrate-root-folder \
 
 ### 5.2 pluto-for-channels
 
+**Status**: ✅ COMPLETED (2026-03-01)
+
 **Container**: `jonmaddox/pluto-for-channels`  
 **Port**: 8080  
 **Storage**: Stateless (no PVC needed)
@@ -407,6 +420,8 @@ sonarr-utils migrate-root-folder \
 
 ### 5.3 EPlusTV
 
+**Status**: ✅ COMPLETED (2026-03-01)
+
 **Container**: `tonywagner/eplustv`  
 **Port**: 8000  
 **Storage**: Longhorn RWO, 5Gi, `config-eplustv`
@@ -423,6 +438,16 @@ sonarr-utils migrate-root-folder \
 
 ### 5.4 Dispatcharr
 
+**Status**: ✅ COMPLETED (2026-03-01)
+
+**Deployment notes**:
+- Image tag is `0.20.1` (no `v` prefix — GHCR tags don't follow `v` convention)
+- Required `memory: 2Gi` limit — runs Redis + Celery + uWSGI + PostgreSQL + Daphne in one container; 512Mi causes OOM
+- PVC name: `data-dispatcharr-0` (10Gi) — stores embedded PostgreSQL
+- On first deploy: old stale PVC had bad PostgreSQL data dir permissions; fix is to delete PVC and let StatefulSet recreate
+- No health probes — all endpoints return 401 until UI auth configured
+- `enableServiceLinks: false` not strictly required (unlike Decypharr) but inherited via namespace patch
+
 **Container**: `ghcr.io/dispatcharr/dispatcharr` (all-in-one mode)  
 **Port**: 9191  
 **Storage**: Longhorn RWO, 10Gi, `data-dispatcharr`
@@ -436,6 +461,8 @@ sonarr-utils migrate-root-folder \
   - `ingress.yaml` (Traefik, `dispatcharr.homelab`)
 
 ### 5.5 Teamarr
+
+**Status**: ✅ COMPLETED (2026-03-01)
 
 **Container**: `ghcr.io/pharaoh-labs/teamarr`  
 **Port**: 9195  
@@ -451,6 +478,8 @@ sonarr-utils migrate-root-folder \
 
 ### 5.6 Patch: Update `media/kustomization.yaml`
 
+**Status**: ✅ COMPLETED (2026-03-01) — all services added to `live/kustomization.yaml`
+
 Add all five new services to the base kustomize file:
 ```yaml
 resources:
@@ -462,6 +491,8 @@ resources:
 ```
 
 ### 5.7 Integration: Channels DVR + Custom Channels
+
+**Status**: 🔲 PENDING — Channels DVR running; custom channel source configuration is manual UI setup step
 
 **Manual setup in Channels app**:
 1. Open Channels DVR admin UI (`http://channels.homelab:8089`)

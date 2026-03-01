@@ -120,6 +120,22 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 - **Cause**: All dispatcharr endpoints (including `/-/healthz`) return 401 until UI auth is configured post-first-boot
 - **Fix**: Remove all health probes from dispatcharr pod spec; process lifecycle management is sufficient
 
+### dispatcharr OOM-killed at 512Mi — appears Running but hangs on all requests
+- **Symptom**: Pod shows `1/1 Running` but HTTP requests hang; `kubectl exec` fails with `signal: killed (possibly OOM-killed)`; Traefik logs show `no endpoints found` for dispatcharr
+- **Cause**: dispatcharr runs Redis, Celery workers (×4), uWSGI (×4 workers), Daphne (WebSocket), and embedded PostgreSQL all in one container. 512Mi is far too small.
+- **Fix**: Set `resources.requests.memory: 1Gi` and `resources.limits.memory: 2Gi` (and `cpu.limits: 2000m`)
+
+### dispatcharr image tags have no `v` prefix on GHCR
+- **Symptom**: `ImagePullBackOff` — image `ghcr.io/dispatcharr/dispatcharr:v0.20.1` not found
+- **Cause**: Dispatcharr's GHCR registry uses semver tags **without** the `v` prefix (e.g., `0.20.1`), unlike most projects. GitHub release tags use `v0.20.1` but the container tags do not.
+- **Fix**: Use `ghcr.io/dispatcharr/dispatcharr:0.20.1` (no `v`). This is also the Renovate-trackable semver tag.
+- **Note**: There are also build-timestamp tags like `0.20.1-20260228042735` — use the clean semver tag instead.
+
+### dispatcharr PostgreSQL fails to start on stale PVC — "data directory has invalid permissions"
+- **Symptom**: Pod enters `CrashLoopBackOff`; logs show `FATAL: data directory "/data/db" has invalid permissions`
+- **Cause**: Old PVC from a previous pod run (different fsGroup/ownership) has `/data/db` with permissions that PostgreSQL rejects (requires `0700` or `0750` for the data dir owner)
+- **Fix**: Delete the PVC (`kubectl delete pvc -n live data-dispatcharr-0`) and let the StatefulSet recreate it fresh. All configuration is entered via web UI on first boot anyway.
+
 ### channels-dvr NFS PVC cross-namespace error
 - **Symptom**: PVC binds to wrong PV or stays Pending; PV already claimed by media namespace
 - **Cause**: Kubernetes PVCs are namespace-scoped; a PVC in `live` cannot claim a PV that was pre-bound to `media`

@@ -1,6 +1,6 @@
 # Cluster State
 
-**Last Updated**: 2026-03-01
+**Last Updated**: 2026-03-01 (live stack completed)
 **Branch**: main  
 **Status**: ✅ Operational
 
@@ -40,11 +40,11 @@
 
 | Pod | Node | Image | PVC |
 |-----|------|-------|-----|
-| channels-dvr-0 | k3s-w1 | fancybits/channels-dvr:latest | config-channels-dvr-0 (5Gi RWO), pvc-media-nfs (NFS recordings) |
-| dispatcharr-0 | k3s-w1 | ghcr.io/dispatcharr/dispatcharr:v0.20.1 | config-dispatcharr-0 (2Gi RWO) |
-| eplustv-0 | k3s-w1 | tonywagner/eplustv:v4.15.0 | config-eplustv-0 (1Gi RWO) |
-| pluto-for-channels | k3s-w1 | jonmaddox/pluto-for-channels:2.0.2 | — (stateless) |
-| teamarr-0 | k3s-w1 | ghcr.io/pharaoh-labs/teamarr:2.2.2 | config-teamarr-0 (5Gi RWO) |
+| channels-dvr-0 | w1 (preferred) | fancybits/channels-dvr:latest | config-channels-dvr (20Gi RWO), pvc-media-nfs (NFS recordings) |
+| dispatcharr-0 | w1 (preferred) | ghcr.io/dispatcharr/dispatcharr:0.20.1 | data-dispatcharr-0 (10Gi RWO) |
+| eplustv-0 | w1 (preferred) | tonywagner/eplustv:v4.15.0 | config-eplustv-0 (5Gi RWO) |
+| pluto-for-channels | w1 (preferred) | jonmaddox/pluto-for-channels:2.0.2 | — (stateless) |
+| teamarr-0 | w1 (preferred) | ghcr.io/pharaoh-labs/teamarr:2.2.2 | data-teamarr-0 (5Gi RWO) |
 
 ---
 
@@ -65,10 +65,10 @@
 | pvc-nfs-streaming-media | — | static NFS | plex-0 (/mnt/streaming-media via share-manager NFSv4) |
 | pvc-nfs-dfs | — | static NFS | plex-0 (/mnt/dfs via NFS server pod) |
 | data-pulsarr-0 | 1Gi | longhorn-simple (RWO) | pulsarr (SQLite DB + config) |
-| config-channels-dvr-0 | 5Gi | longhorn-simple (RWO) | channels-dvr (config + recordings DB) |
-| config-dispatcharr-0 | 2Gi | longhorn-simple (RWO) | dispatcharr |
-| config-eplustv-0 | 1Gi | longhorn-simple (RWO) | eplustv |
-| config-teamarr-0 | 5Gi | longhorn-simple (RWO) | teamarr |
+| config-channels-dvr | 20Gi | longhorn-simple (RWO) | channels-dvr (config + recordings DB) |
+| data-dispatcharr-0 | 10Gi | longhorn-simple (RWO) | dispatcharr (embedded PostgreSQL + config) |
+| config-eplustv-0 | 5Gi | longhorn-simple (RWO) | eplustv |
+| data-teamarr-0 | 5Gi | longhorn-simple (RWO) | teamarr |
 | pvc-media-nfs (live) | 1Ti | nfs-unraid (RWX) | channels-dvr (Unraid media — recordings) |
 
 ---
@@ -127,7 +127,7 @@ mount -t nfs 192.168.1.29:/mnt/user/transcode /mnt/unraid/transcode
 | http://pulsarr.homelab | pulsarr | 3003 || http://logs.homelab | victoria-logs (VMUI + API) | 9428 |
 | http://channels.homelab | channels-dvr | 8089 |
 | http://dispatcharr.homelab | dispatcharr | 9191 |
-| http://eplustv.homelab | eplustv | 8080 |
+| http://eplustv.homelab | eplustv | 8000 |
 | http://pluto.homelab | pluto-for-channels | 8080 |
 | http://teamarr.homelab | teamarr | 9195 |
 
