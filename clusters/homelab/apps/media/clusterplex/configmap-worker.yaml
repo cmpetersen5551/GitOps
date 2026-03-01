@@ -11,11 +11,10 @@ data:
   TZ: America/Chicago
   PUID: "1000"
   PGID: "1000"
-  # universal-package-install installs apt packages on container start.
-  # intel-media-va-driver-non-free provides the iHD VA-API driver (libva) required for
-  # ffmpeg QSV to initialise /dev/dri/renderD128 — without it QSV fails with "Device creation failed: -12"
-  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest|lscr.io/linuxserver/mods:universal-package-install
-  INSTALL_PACKAGES: intel-media-va-driver-non-free
+  # Plex bundles its own Intel Media Driver (intel-media-driver conan package) statically,
+  # so no system package is needed. Just mount /dev/dri and set supplementalGroups to the
+  # render group GID (992 on k3s-w3) for device access.
+  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest
   ORCHESTRATOR_URL: http://clusterplex-orchestrator:3500
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
