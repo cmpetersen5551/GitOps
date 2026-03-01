@@ -81,15 +81,10 @@
       "automerge": false
     },
     {
-      "description": "Group Flux updates together",
-      "matchDatasources": [
-        "helm"
-      ],
-      "groupName": "flux-updates",
-      "automerge": false,
-      "matchPackageNames": [
-        "/^flux/"
-      ]
+      "description": "Flux: show in dashboard but never auto-create a PR. gotk-components.yaml is generated; upgrade via 'flux install --export' manually.",
+      "matchManagers": ["flux"],
+      "matchPackageNames": ["fluxcd/flux2"],
+      "dependencyDashboardApproval": true
     },
     {
       "description": "Group Longhorn updates",
