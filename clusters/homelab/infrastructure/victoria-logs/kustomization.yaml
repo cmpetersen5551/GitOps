@@ -5,6 +5,3 @@ resources:
   - ./helmrepository.yaml
   - ./helmrelease.yaml
   - ./ingress.yaml
-
-patchesStrategicMerge:
-  - patch-affinity.yaml
