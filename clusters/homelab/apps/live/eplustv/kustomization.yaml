@@ -4,7 +4,6 @@ kind: Kustomization
 namespace: live
 
 resources:
-  - secret.enc.yaml
   - statefulset.yaml
   - service.yaml
   - service-headless.yaml
