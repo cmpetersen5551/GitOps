@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # ConfigMap
+  - configmap.yaml
+  # Storage - config (Longhorn RWX via share-manager NFSv4 for w3)
+  - pvc-plex-config.yaml
+  - pv-plex-config-w3.yaml
+  - pvc-plex-config-w3.yaml
+  # Storage - media (Unraid NFS, static for w3)
+  - pv-nfs-media-w3.yaml
+  - pvc-nfs-media-w3.yaml
+  # Storage - streaming media (Longhorn RWX share-manager, static for w3)
+  - pv-streaming-media-w3.yaml
+  - pvc-streaming-media-w3.yaml
+  # Storage - DFS FUSE re-export (NFS server pod on w1/w2; w3 mounts via static NFS PV)
+  - pv-plex-dfs-nfs.yaml
+  - pvc-plex-dfs-nfs.yaml
+  - service-plex-nfs-server.yaml
+  - nfs-server-deployment.yaml
+  # Plex
+  - service.yaml
+  - service-headless.yaml
+  - statefulset.yaml
+  - ingress.yaml

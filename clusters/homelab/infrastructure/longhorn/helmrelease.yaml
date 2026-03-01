@@ -85,8 +85,8 @@ spec:
       v1DataEngine: true
       v2DataEngine: false  # Stick with stable V1
       
-      # Backup settings (optional - configure later)
-      backupTarget: ""
+      # Backup settings
+      backupTarget: "nfs://192.168.1.29/longhorn_backup"
       backupTargetCredentialSecret: ""
       
     # Longhorn Manager settings

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plex-config
+  namespace: media
+data:
+  VERSION: docker
+  TZ: America/Chicago
+  PUID: "0"
+  PGID: "0"
+  ADVERTISE_IP: "https://plex.homelab:443,http://plex.homelab:80"
+  PLEX_PREFERENCE_secureConnections: "0"
+  # Hardware acceleration must be configured directly in Preferences.xml on the PVC.
+  # linuxserver/plex does not process PLEX_PREFERENCE_* for HardwareAcceleratedCodecs /
+  # HardwareDevicePath. After first deploy, patch Preferences.xml via kubectl exec
+  # (see plan: plans/plex-normal-on-w3.md Phase 6.5).

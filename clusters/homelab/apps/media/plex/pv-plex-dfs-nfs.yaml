@@ -1,18 +1,22 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: clusterplex-dfs-nfs-pv
+  name: plex-dfs-nfs-pv
   labels:
-    app.kubernetes.io/name: clusterplex-dfs-nfs
-    app.kubernetes.io/part-of: clusterplex
+    app.kubernetes.io/name: plex-dfs-nfs
+    app.kubernetes.io/part-of: plex
 spec:
   capacity:
     storage: 100Gi
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: media
+    name: plex-dfs-nfs
   nfs:
-    server: 10.43.160.244  # ClusterIP of clusterplex-nfs-server svc — routes to wherever pod runs (HA)
+    server: 10.43.160.244  # ClusterIP of plex-nfs-server svc — pinned, routes to NFS server pod (on w1/w2 for HA)
     path: /                  # NFSv4 root — fsid=0 export IS the /export/dfs directory
   mountOptions:
     - nfsvers=4      # Force NFSv4 — avoids NFSv3 portmapper/mountd complexity

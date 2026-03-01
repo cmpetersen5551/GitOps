@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: clusterplex-nfs-server
+  name: plex-nfs-server
   namespace: media
   labels:
-    app.kubernetes.io/name: clusterplex-nfs-server
-    app.kubernetes.io/part-of: clusterplex
+    app.kubernetes.io/name: plex-nfs-server
+    app.kubernetes.io/part-of: plex
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: clusterplex-nfs-server
+      app.kubernetes.io/name: plex-nfs-server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: clusterplex-nfs-server
-        app.kubernetes.io/part-of: clusterplex
+        app.kubernetes.io/name: plex-nfs-server
+        app.kubernetes.io/part-of: plex
     spec:
       affinity:
         nodeAffinity:

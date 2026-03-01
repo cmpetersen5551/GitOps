@@ -3,7 +3,7 @@ kind: PersistentVolume
 metadata:
   name: pv-streaming-media-w3
   labels:
-    app.kubernetes.io/part-of: clusterplex
+    app.kubernetes.io/part-of: plex
 spec:
   capacity:
     storage: 10Gi
@@ -15,7 +15,7 @@ spec:
     namespace: media
     name: pvc-streaming-media-w3
   # Accesses the same Longhorn RWX volume as pvc-streaming-media, via share-manager NFS.
-  # Worker on w3 uses this because Longhorn CSI is not installed on w3.
+  # w3 uses this because Longhorn CSI is not installed on w3 (LXC).
   # ClusterIP 10.43.219.107 is the share-manager Service for pvc-c3fd952e-f166-4cd5-b446-40c3cd18af03.
   # If this PVC is ever deleted and recreated, the ClusterIP will change — update this file.
   mountOptions:

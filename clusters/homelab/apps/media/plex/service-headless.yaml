@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex-headless
+  namespace: media
+  labels:
+    app.kubernetes.io/name: plex
+    app.kubernetes.io/part-of: plex
+spec:
+  clusterIP: None
+  ports:
+    - name: pms
+      port: 32400
+  selector:
+    app.kubernetes.io/name: plex

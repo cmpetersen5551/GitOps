@@ -1,0 +1,13 @@
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: plex-config-daily-backup
+  namespace: longhorn-system
+spec:
+  cron: "0 3 * * *"   # 3:00 AM daily
+  task: backup
+  groups: []
+  retain: 7            # Keep 7 daily backups
+  concurrency: 1
+  labels:
+    app: plex

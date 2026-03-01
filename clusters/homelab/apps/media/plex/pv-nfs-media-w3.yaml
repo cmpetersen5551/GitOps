@@ -3,7 +3,7 @@ kind: PersistentVolume
 metadata:
   name: pv-nfs-media-w3
   labels:
-    app.kubernetes.io/part-of: clusterplex
+    app.kubernetes.io/part-of: plex
 spec:
   capacity:
     storage: 1Ti

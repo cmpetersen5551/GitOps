@@ -8,3 +8,5 @@ resources:
   - helmrelease.yaml
   - storageclass-simple.yaml  # Custom StorageClass without node selectors
   - storageclass-rwx.yaml  # RWX StorageClass for shared media libraries (NFSv4)
+  - ingress.yaml
+  - recurring-backup-plex.yaml

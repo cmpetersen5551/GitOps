@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: plex
+  namespace: media
+  labels:
+    app.kubernetes.io/name: plex
+    app.kubernetes.io/part-of: plex
+spec:
+  serviceName: plex-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plex
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plex
+        app.kubernetes.io/part-of: plex
+    spec:
+      securityContext:
+        fsGroup: 0
+        runAsNonRoot: false
+        runAsUser: 0
+        supplementalGroups: [992]  # render group GID on w3 (PVE host) — verify in pre-flight
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: gpu
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: gpu
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      enableServiceLinks: false
+      containers:
+        - name: plex
+          image: lscr.io/linuxserver/plex:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: pms
+              containerPort: 32400
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: plex-config
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media-nfs
+              mountPath: /mnt/media
+            - name: streaming-media
+              mountPath: /mnt/streaming-media
+            - name: dfs
+              mountPath: /mnt/dfs
+            - name: dri
+              mountPath: /dev/dri
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 4000m
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /identity
+              scheme: HTTP
+              port: 32400
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60   # 10 min for linuxserver first-boot apt-get
+          readinessProbe:
+            httpGet:
+              path: /identity
+              scheme: HTTP
+              port: 32400
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /identity
+              scheme: HTTP
+              port: 32400
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: pvc-plex-config-w3    # Static NFS PV → Longhorn share-manager (NFSv4)
+        - name: media-nfs
+          persistentVolumeClaim:
+            claimName: pvc-nfs-media-w3      # Static NFS PV → Unraid /mnt/user/media
+        - name: streaming-media
+          persistentVolumeClaim:
+            claimName: pvc-streaming-media-w3  # Static NFS PV → Longhorn share-manager
+        - name: dfs
+          persistentVolumeClaim:
+            claimName: plex-dfs-nfs          # Static NFS PV → NFS server pod (re-exports /mnt/dfs FUSE)
+        - name: dri
+          hostPath:
+            path: /dev/dri                   # Intel QSV GPU on w3
+            type: Directory
+        # No transcode volume — Plex writes transcode buffers to container overlay fs (ephemeral, correct)
