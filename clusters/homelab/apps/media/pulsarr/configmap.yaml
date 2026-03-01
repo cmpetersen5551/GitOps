@@ -8,9 +8,9 @@ metadata:
 data:
   .env: |
     # Core Configuration
-    port=3003
+    port=80
     listenPort=3003
-    baseUrl=http://pulsarr.media.svc.cluster.local:3003
+    baseUrl=http://pulsarr.media.svc.cluster.local
     TZ=America/Chicago
     logLevel=info
     enableConsoleOutput=true
