@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dispatcharr
+  namespace: media
+  labels:
+    app: dispatcharr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dispatcharr
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: dispatcharr
+        streaming-stack: "true"
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-dispatcharr
+      containers:
+        - name: dispatcharr
+          image: ghcr.io/dispatcharr/dispatcharr:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9191
+              name: http
+          env:
+            - name: TZ
+              value: "America/Chicago"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9191
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9191
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30

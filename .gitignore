@@ -1,0 +1,12 @@
+# SOPS age key
+age.key
+
+# Decrypted files (for local review)
+*.dec.yaml
+*.decrypted.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
