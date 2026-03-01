@@ -22,7 +22,7 @@ spec:
         fsGroup: 0
         runAsNonRoot: false
         runAsUser: 0
-        supplementalGroups: [44]  # render group — required for /dev/dri access on Debian
+        supplementalGroups: [992]  # render group GID on k3s-w3 (PVE host) — confirmed via stat /dev/dri/renderD128
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:

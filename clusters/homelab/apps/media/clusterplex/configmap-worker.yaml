@@ -11,7 +11,9 @@ data:
   TZ: America/Chicago
   PUID: "1000"
   PGID: "1000"
-  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest
+  # universal-intel-qsv installs intel-media-driver (iHD) + libmfx inside the container,
+  # required for ffmpeg QSV device init — without it QSV fails with "Device creation failed: -12"
+  DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest|ghcr.io/linuxserver/mods:universal-intel-qsv
   ORCHESTRATOR_URL: http://clusterplex-orchestrator:3500
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
