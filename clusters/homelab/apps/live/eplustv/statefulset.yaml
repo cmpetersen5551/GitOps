@@ -23,7 +23,7 @@ spec:
         runAsUser: 0
       containers:
         - name: eplustv
-          image: tonywagner/eplustv:latest
+          image: tonywagner/eplustv:v4.15.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

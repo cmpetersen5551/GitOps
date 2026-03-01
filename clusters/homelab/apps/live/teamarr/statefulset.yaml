@@ -23,7 +23,7 @@ spec:
         runAsUser: 0
       containers:
         - name: teamarr
-          image: ghcr.io/pharaoh-labs/teamarr:latest
+          image: ghcr.io/pharaoh-labs/teamarr:v2.2.2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9195
