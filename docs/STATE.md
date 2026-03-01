@@ -1,6 +1,6 @@
 # Cluster State
 
-**Last Updated**: 2026-03-01  
+**Last Updated**: 2026-03-01
 **Branch**: main  
 **Status**: ✅ Operational
 
@@ -67,6 +67,7 @@
 | Volume-Fencing | kube-system | CronJob | Every 2 min, prevents split-brain on storage node recovery |
 | Longhorn Backup | longhorn-system | RecurringJob | `backup-all-volumes`: backs all 9 cluster volumes (config + data PVCs), nightly 3 AM UTC → `nfs://192.168.1.29:/mnt/cache/longhorn_backup`, 7-day retention |
 | **Renovate** | **—** | **Mend-hosted** | **Detects Helm + container updates, posts PRs for review. Dashboard: Issue #11. Config: renovate.json** |
+| **VictoriaLogs** | **victoria-logs** | **HelmRelease** | **`victoria-logs-single` chart; Vector DaemonSet collects all cluster logs; 10Gi PVC on longhorn-simple; retention 4d; pod on k3s-w1** |
 
 ---
 
@@ -82,10 +83,37 @@
 | http://decypharr-download.homelab | decypharr-download | 8282 |
 | http://plex.homelab | plex | 32400 |
 | http://longhorn.homelab | longhorn-ui | — |
-| http://pulsarr.homelab | pulsarr | 3003 |
+| http://pulsarr.homelab | pulsarr | 3003 || http://logs.homelab | victoria-logs (VMUI + API) | 9428 |
 
+---
+
+## Tooling
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `docs/vlogs-troubleshoot.sh` | Query Victoria Logs from macOS | `./docs/vlogs-troubleshoot.sh help` |
+
+**vlogs-troubleshoot.sh quick reference**:
+```bash
+chmod +x docs/vlogs-troubleshoot.sh
+./docs/vlogs-troubleshoot.sh fields          # Discover indexed field names (run first)
+./docs/vlogs-troubleshoot.sh streams         # List active log streams with hit counts
+./docs/vlogs-troubleshoot.sh errors 2h       # Find errors last 2 hours
+./docs/vlogs-troubleshoot.sh top 1h 10       # Top 10 noisiest streams
+./docs/vlogs-troubleshoot.sh tail '*'        # Live log stream
+./docs/vlogs-troubleshoot.sh query '_time:15m i(error) | sort by (_time)'
+```
+Default URL: `http://logs.homelab` (auto-falls back to `kubectl port-forward -n victoria-logs svc/victoria-logs 9428:9428` if unreachable).
 ---
 
 ## Pending (Not Yet Deployed)
 
 - Nothing currently pending
+
+---
+
+## Recently Completed (2026-03-01)
+
+- Phase 1.1: Longhorn recurring backups — `backup-all-volumes` RecurringJob
+- Phase 1.2: Renovate — automated Helm + container update PRs
+- Phase 2.1: VictoriaLogs — centralized logging, Vector DaemonSet, `http://logs.homelab`

@@ -93,7 +93,33 @@ tolerations:
 
 ---
 
-## DFS Sharing (RealDebrid FUSE mount to consumer pods)
+## Centralized Logging
+
+**Chosen**: VictoriaLogs `victoria-logs-single` Helm chart + Vector DaemonSet (2026-03-01)  
+**Rejected**:
+- Loki + Promtail — heavier resource footprint, more complex setup (DaemonSet + sidecar architecture), LogQL DSL steeper than LogsQL
+- ELK/OpenSearch — far too heavy for homelab
+- filesd hostPath scrape — would have worked but Vector DaemonSet (chart-native) is simpler and better maintained
+
+**Architecture**:
+- `victoria-logs-single` HelmRelease in `victoria-logs` namespace; pod on k3s-w1 (nodeSelector: storage nodes)
+- Vector DaemonSet (chart-bundled) tolerates storage taint + control-plane taint — runs on all 4 nodes
+- 10Gi PVC (longhorn-simple RWO), 4d retention — sized for actual usage not theoretical max
+- Bridge Service required: chart generates service name `victoria-logs-victoria-logs-server`; added explicit `Service` named `victoria-logs` to allow ingress routing
+- Ingress: `logs.homelab` → `victoria-logs:9428` (Traefik)
+- Web UI: `http://logs.homelab/select/vmui`
+- API: `POST http://logs.homelab/select/logsql/query` (LogsQL, JSONL response)
+
+**API facts (non-obvious)**:
+- Endpoint is `/select/logsql/query` (not `/select/logsql` or `/api/v1/query`)
+- Response format is **JSONL** — one JSON object per line; NOT a JSON array
+- Core fields: `_time` (RFC3339), `_msg` (message), `_stream` (label set string)
+- Kubernetes metadata field names depend on Vector config — always run `field_names` endpoint to discover them
+- Use `curl --data-urlencode 'query=...'` for safe encoding of complex LogsQL
+
+**Tooling**: `docs/vlogs-troubleshoot.sh` — run from macOS, auto port-forward fallback
+
+---
 
 **Chosen**: Direct FUSE mount propagation via hostPath Bidirectional (2026-02-28)
 

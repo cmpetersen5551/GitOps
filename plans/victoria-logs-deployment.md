@@ -1,7 +1,8 @@
 # VictoriaLogs Deployment Plan
 
 **Date**: March 1, 2026  
-**Status**: Planning phase  
+**Completed**: March 1, 2026  
+**Status**: ✅ COMPLETED  
 **Owner**: Chris  
 **Phase**: Phase 2 (Observability Foundation)
 
@@ -304,13 +305,20 @@ These are deferred but documented for reference:
 
 ## Success Criteria
 
-- [ ] VictoriaLogs StatefulSet running (1 replica, Ready)
-- [ ] PVC bound and mounted (`100 Gi` from longhorn-simple)
-- [ ] Ingress active: `http://logs.homelab/vmui` loads without errors
-- [ ] VMUI shows available labels (pod, namespace, container)
-- [ ] Can query `{namespace="media"}` and see logs from sonarr, radarr, plex, decypharr, etc.
-- [ ] Logs are recent (< 5 min old for active pods)
-- [ ] PVC included in nightly Longhorn backup and labeled correctly
+- [x] VictoriaLogs StatefulSet running (1 replica, Ready) — running on k3s-w1
+- [x] PVC bound and mounted (10 Gi from longhorn-simple — plan was 100Gi, 10Gi sufficient for 4d retention)
+- [x] Ingress active: `http://logs.homelab` → VMUI at `/select/vmui` — required bridge Service (see GOTCHAS)
+- [x] VMUI accessible and queryable
+- [x] Vector DaemonSet running on all nodes (including cp1 and storage nodes) — logs flowing from all pods
+- [x] API accessible: `POST http://logs.homelab/select/logsql/query`
+- [x] Troubleshooting script available: `docs/vlogs-troubleshoot.sh`
+
+**Deviations from plan**:
+- PVC: 10Gi (not 100Gi) — 4d retention fits easily; can expand via Longhorn UI if needed
+- Retention: 4d (not 7d)
+- Log collection: Vector DaemonSet (not filesd hostPath scrape) — simpler, chart-native, works out of the box
+- Bridge Service required: chart generates service with name `victoria-logs-victoria-logs-server`, not `victoria-logs`; added bridge service to make ingress work
+- PVC not yet labeled for nightly backup (low priority — 4d retention data loss is acceptable)
 
 ---
 

@@ -91,65 +91,66 @@ Only the **Live TV stack** (pluto-for-channels, EPlusTV, etc.) requires encrypte
 
 ### 2.1 Centralized Logging — VictoriaLogs + Ingress
 
-**Status**: Planning phase (detailed plan: [plans/victoria-logs-deployment.md](plans/victoria-logs-deployment.md))
+**Status**: ✅ COMPLETED (2026-03-01)  
+**Detailed plan**: [plans/victoria-logs-deployment.md](plans/victoria-logs-deployment.md)
 
-**Scope**: Centralized log aggregation for media apps (sonarr, plex, decypharr, radarr, etc.) + infrastructure components.
+**Scope**: Centralized log aggregation for all cluster pods via Helm chart + Vector DaemonSet.
 
-**Why VictoriaLogs over Loki/Prometheus**:
-- **Simpler setup**: Single binary StatefulSet vs Loki's DaemonSet + Promtail sidecar complexity
-- **Lower resource overhead**: ~500 MB–1 GB RAM vs Loki's 1–2 GB
-- **Better high-cardinality handling**: Efficient log compression for pod-specific logs
-- **Smaller disk footprint**: ~15 GB/month vs Loki's ~20 GB/month
-- **Intuitive queries**: Regex/filter-based vs LogQL's domain-specific language
-- **No Grafana dependency**: Built-in VMUI web interface (`http://logs.homelab/vmui`) sufficient for debugging
-- **No metrics overhead**: Skip Prometheus entirely; only logs are useful for your homelab
+**What was delivered**:
+- **HelmRelease** `victoria-logs-single` in namespace `victoria-logs` (Flux-managed)
+- **Vector DaemonSet** (bundled in chart) — collects stdout/stderr from all pods on all nodes, tolerates both storage taint and control-plane taint
+- **Bridge Service** `victoria-logs` (port 9428) — needed because Helm chart generates service with a different name; bridge routes ingress traffic correctly
+- **Ingress** `logs.homelab` → `http://victoria-logs.victoria-logs:9428` (Traefik)
+- **Web UI**: `http://logs.homelab/select/vmui` — functional, no Grafana needed
+- **API**: `http://logs.homelab/select/logsql/query` (LogsQL over HTTP)
+- **Troubleshooting script**: `docs/vlogs-troubleshoot.sh` — see below
 
-**What gets deployed**:
-1. **VictoriaLogs StatefulSet** (1 replica)
-   - Container: `victorialogs/victoria-logs`
-   - Storage: 100 Gi PVC on `longhorn-simple` (RWO)
-   - Retention: 7 days (auto-cleanup of older logs)
-   - Memory: 512Mi requests / 1Gi limits
-   - Log scrape: Kubelet `/var/log/pods/**` via filesd
+**Actual config vs plan** (deviations from original plan):
+- PVC size: **10Gi** (not 100Gi; plan was over-estimated; 10Gi is generous for 4d retention)
+- Retention: **4d** (not 7d; fits well within 10Gi)
+- Log collection: **Vector DaemonSet** (not filesd hostPath scrape) — simpler, chart-native
+- Bridge service required: Helm chart service name doesn't match release name
 
-2. **Ingress route** — `http://logs.homelab` → VMUI at `:9428/vmui`
+**Issues & fixes during implementation**:
+1. Pod didn't schedule — `nodeSelector`/`tolerations` must use native chart value paths (`server.nodeSelector`, `server.tolerations`), not kustomize patches
+2. Ingress returned 404 — Helm-generated service name mismatch; fixed by adding a bridge `Service` pointing to correct backend
+3. Vector DaemonSet defaulted to no tolerations — added `vector.tolerations` in HelmRelease to cover control-plane + storage nodes
+4. API queries initially broken — wrong endpoint (`/select/logsql` doesn't exist; correct is `/select/logsql/query`), wrong response parsing (JSONL not JSON array)
 
-3. **Kustomization** — `clusters/homelab/infrastructure/victoria-logs/`
+**Troubleshooting script** — `docs/vlogs-troubleshoot.sh`:
+```bash
+chmod +x docs/vlogs-troubleshoot.sh
 
-**Implementation steps**:
-1. Create HelmRelease + HelmRepository (Victoria Metrics helm charts)
-2. Create Ingress (Traefik, route to `:9428`)
-3. Create kustomization.yaml
-4. Deploy via Flux: `flux reconcile kustomization infrastructure --with-source`
-5. Verify logs flowing: Query `{namespace="media"}` in VMUI
+# 1. Discover what field names Vector actually indexed (run this first)
+./docs/vlogs-troubleshoot.sh fields
 
-**Query examples** (simple, no LogQL needed):
+# 2. See all active log streams with hit counts
+./docs/vlogs-troubleshoot.sh streams
+
+# 3. Find errors across cluster last 2 hours
+./docs/vlogs-troubleshoot.sh errors 2h
+
+# 4. Live tail all logs
+./docs/vlogs-troubleshoot.sh tail '*'
+
+# 5. Raw LogsQL query
+./docs/vlogs-troubleshoot.sh query '_time:15m i(error) | sort by (_time)'
+
+# Default URL: http://logs.homelab — auto-falls back to kubectl port-forward if unreachable
 ```
-{namespace="media"}                    # All media app logs
-{pod="sonarr*"}                        # Sonarr pod logs only
-{pod=~"(sonarr|radarr).*"}             # Sonarr + Radarr combined
-{pod=~".*"} | "error"                  # Text search: all errors across cluster
-{pod="plex*"} | "transcode"            # Plex transcoding logs
+
+**Query patterns** (LogsQL — use `fields` command first to confirm exact field names):
+```
+_time:5m                              # All logs last 5 min
+_time:1h i(error)                     # Case-insensitive errors
+{kubernetes_namespace="media"}         # Filter by namespace (if field exists)
+_time:1h | top 10 by (_stream)        # Noisiest streams
+_time:15m | sort by (_time) | limit 50 # Recent logs sorted
 ```
 
-**Storage & retention**:
-- PVC size: 100 Gi (6-month buffer at ~15 GB/month)
-- Auto-labeled for nightly Longhorn backups (`recurring-job-group.longhorn.io/default=enabled`)
-- Node affinity: Preferred on w1 (primary storage node)
+**Effort**: ~3 hours total (initial deploy 30 min + scheduling fix + ingress fix + Vector config + API research + script rewrite).
 
-**Verification criteria**:
-- [ ] VictoriaLogs StatefulSet running (1 replica, Ready)
-- [ ] PVC bound to 100 Gi from longhorn-simple
-- [ ] Ingress active: `http://logs.homelab/vmui` loads
-- [ ] VMUI shows available labels (pod, namespace, container)
-- [ ] Can query `{namespace="media"}` and see recent logs from sonarr, radarr, plex, decypharr-*, etc.
-- [ ] Logs are < 5 min old for active pods
-
-**Effort**: ~30 min (manifests + deploy + test).
-
-**Blocking dependency for**: None (optional, but strongly recommended before Phase 4/5).
-
-**Future extension**: Add Grafana later if dashboards become needed (independent deployment, not required for basic logging).
+**Blocking dependency for**: None. Phase 3+ can proceed independently.
 
 ---
 

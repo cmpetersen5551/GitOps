@@ -87,7 +87,43 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 
 ---
 
-## Sonarr / Radarr
+## Victoria Logs
+
+### Pod won't schedule (nodeSelector/tolerations ignored)
+- **Symptom**: Pod stays `Pending`; `nodeSelector` or `tolerations` in kustomize patches are ineffective
+- **Cause**: Kustomize strategic-merge patches on Helm-rendered StatefulSets are unreliable for generated pods; the chart has its own value paths
+- **Fix**: Use native chart values in HelmRelease: `server.nodeSelector`, `server.tolerations`, `vector.tolerations`
+
+### Ingress returns 404 (`logs.homelab` works but every path returns 404)
+- **Symptom**: `http://logs.homelab` returns 404 from Traefik
+- **Cause**: Helm chart generates the Service with a name like `victoria-logs-victoria-logs-server`, not matching the release name. Ingress backend pointed at non-existent service name.
+- **Fix**: Add a bridge `Service` in the same namespace that selects the chart-generated pod and exposes port 9428. Point the Ingress at this bridge service.
+
+### Vector DaemonSet doesn't collect logs from storage/control-plane nodes
+- **Symptom**: Logs from pods on k3s-w1, k3s-w2, or k3s-cp1 missing from VictoriaLogs
+- **Cause**: Vector DaemonSet has no tolerations by default; won't schedule on tainted nodes
+- **Fix**: Set `vector.tolerations` in HelmRelease to include both storage taint and control-plane taint
+
+### API returns "unsupported path requested" or 404
+- **Symptom**: `curl http://logs.homelab/select/logsql` returns an error
+- **Cause**: `/select/logsql` does not exist. The correct endpoint is `/select/logsql/query`
+- **Fix**: Use `POST /select/logsql/query` with `--data-urlencode 'query=<LogsQL>'`
+
+### Response parsing fails (`jq '.[]'` returns error)
+- **Symptom**: `jq '.[]'` on API response throws parse errors
+- **Cause**: The API returns **JSONL** (JSON Lines) — one JSON object per **line**, not a JSON array. Each line is a separate JSON object.
+- **Fix**: Parse line-by-line: `curl ... | jq -r '"[" + ._time + "] " + ._msg'` (not `'.[]'`)
+
+### Field names `.timestamp`, `.message`, `.pod` don't exist
+- **Symptom**: `jq` extracts `null` for expected fields
+- **Cause**: VictoriaLogs always uses `_time`, `_msg`, `_stream` as core field names. Kubernetes metadata field names depend on Vector's config and differ from what you might expect.
+- **Fix**: Run `./docs/vlogs-troubleshoot.sh fields` to discover exact indexed field names before writing queries
+
+### URL encoding with `jq -sRr @uri` fails for complex queries
+- **Cause**: `jq @uri` doesn't reliably encode all special chars (e.g., `|`, `(`, `)`) needed in LogsQL
+- **Fix**: Use `curl --data-urlencode 'query=<value>'`; curl handles encoding correctly
+
+---
 
 ### Files in /mnt/dfs show as `?????????` (inaccessible)
 - **Cause**: This was the Samba/FUSE `st_nlink=0` bug from the old SMB architecture. SMB is gone.
