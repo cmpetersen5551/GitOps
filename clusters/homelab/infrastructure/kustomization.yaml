@@ -6,3 +6,4 @@ resources:
   - ./storage       # NFS mounts (Unraid)
   - ./longhorn      # HA storage (2-node replication)
   - ./descheduler   # Automatic failback to primary node (active-passive HA)
+  - ./victoria-logs # Centralized log aggregation (7-day retention)

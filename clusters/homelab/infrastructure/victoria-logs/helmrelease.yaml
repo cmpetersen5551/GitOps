@@ -1,0 +1,48 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+  namespace: victoria-logs
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: victoria-logs-single
+      version: "0.x.x"
+      sourceRef:
+        kind: HelmRepository
+        name: victoria-logs
+        namespace: victoria-logs
+  values:
+    server:
+      persistentVolume:
+        enabled: true
+        size: 100Gi
+        storageClassName: longhorn-simple
+        mountPath: /victorialogs-data
+      
+      vmui:
+        enabled: true
+      
+      extraArgs:
+        - "-retentionPeriod=7d"
+        - "-storageDataPath=/victorialogs-data"
+      
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 250m
+        limits:
+          memory: 1Gi
+          cpu: 500m
+    
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: node.longhorn.io/primary
+                  operator: In
+                  values: ["true"]

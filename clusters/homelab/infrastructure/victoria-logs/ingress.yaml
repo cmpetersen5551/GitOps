@@ -1,0 +1,22 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: victoria-logs
+  namespace: victoria-logs
+  labels:
+    app.kubernetes.io/name: victoria-logs
+    app.kubernetes.io/part-of: victoria-logs
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: logs.homelab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: victoria-logs
+                port:
+                  number: 9428
