@@ -199,6 +199,11 @@ Correct values are `http` and `https` matching Traefik's internal entrypoint nam
   - Re-exports as read-only NFS to allow GPU nodes to access FUSE content
   - Service ClusterIP stable across pod restarts; HA failover handled by descheduler
 
+**Rejected (ClusterPlex — removed 2026-02-28)**:
+- ClusterPlex (orchestrator Deployment + stateless GPU worker StatefulSet) — GPU path was architecturally broken: PMS ran on w1/w2 and generated libx264 transcode arguments, defeating vaapi GPU offload on w3. Added unnecessary complexity: separate orchestrator, worker StatefulSet, per-worker codec PVCs, DOCKER_MOD layer. Normal Plex with direct DRI device access on w3 is simpler and actually works.
+
+**Longhorn config backup**: Target `nfs://192.168.1.29:/mnt/cache/longhorn_backup` (Unraid NFS). RecurringJob `plex-config-daily-backup` runs nightly at 3 AM, retains 7 daily backups. Block-level incremental after first full backup. Restore via Longhorn UI: Volumes → Backups → Restore to new PVC.
+
 **Why This Works for LXC w3**:
 - w3 is Proxmox VE LXC, cannot use Longhorn iSCSI CSI driver (block device cgroups forbidden)
 - Config PVC is Longhorn RWX (replicated on w1/w2) → share-manager exports over NFSv4

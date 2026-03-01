@@ -29,6 +29,9 @@
 | profilarr-0 | k3s-w1 | — | config-profilarr-0 (2Gi RWO) |
 | decypharr-streaming-0 | k3s-w1 | cy01/blackhole:beta | config-decypharr-streaming-0 (1Gi RWO) |
 | decypharr-download-0 | k3s-w1 | cy01/blackhole:latest | config-decypharr-download-0 (1Gi RWO) |
+| plex-0 | k3s-w3 | lscr.io/linuxserver/plex:latest | pvc-nfs-plex-config, pvc-nfs-streaming-media, pvc-nfs-dfs, pvc-media-nfs |
+| plex-config-holder | k3s-w1 | busybox:latest | pvc-plex-config (CSI, keeps share-manager alive) |
+| plex-nfs-server | k3s-w1 | erichough/nfs-server | — (re-exports /mnt/dfs FUSE for w3) |
 
 ---
 
@@ -43,8 +46,11 @@
 | config-decypharr-streaming-0 | 1Gi | longhorn-simple (RWO) | decypharr-streaming |
 | config-decypharr-download-0 | 1Gi | longhorn-simple (RWO) | decypharr-download |
 | pvc-streaming-media | 10Gi | longhorn-rwx (RWX) | sonarr, radarr, decypharr-streaming (symlink library) |
-| pvc-media-nfs | 1Ti | nfs-unraid (RWX) | sonarr, radarr (read-only Unraid media) |
-| pvc-transcode-nfs | 200Gi | nfs-unraid (RWX) | transcode cache |
+| pvc-media-nfs | 1Ti | nfs-unraid (RWX) | sonarr, radarr, plex-0 (read-only Unraid media) |
+| pvc-plex-config | 10Gi | longhorn-rwx (RWX) | plex-config-holder (CSI mount; keeps Longhorn share-manager alive) |
+| pvc-nfs-plex-config | 10Gi | static NFS | plex-0 (/config via share-manager NFSv4) |
+| pvc-nfs-streaming-media | — | static NFS | plex-0 (/mnt/streaming-media via share-manager NFSv4) |
+| pvc-nfs-dfs | — | static NFS | plex-0 (/mnt/dfs via NFS server pod) |
 
 ---
 
@@ -57,6 +63,7 @@
 | Traefik | kube-system | Deployment | Reverse proxy, ingress |
 | Descheduler | kube-system | CronJob | Every 5 min, RemovePodsViolatingNodeAffinity (enables failback to w1) |
 | Volume-Fencing | kube-system | CronJob | Every 2 min, prevents split-brain on storage node recovery |
+| Longhorn Backup | longhorn-system | RecurringJob | `plex-config-daily-backup`: nightly 3 AM → `nfs://192.168.1.29:/mnt/cache/longhorn_backup`, 7-day retention |
 
 ---
 

@@ -152,7 +152,7 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 
 ---
 
-## ClusterPlex / NFS-server pod
+## Plex / NFS-server pod
 
 ### NFS server pod reports "no valid exports" / fails to export
 - **Cause**: `mountPropagation` was missing on the hostPath volumeMount. Without `HostToContainer`, the FUSE mount at `/mnt/dfs` created by decypharr-streaming is invisible inside the NFS server pod — it sees an empty directory, so `exportfs` finds nothing to export.
@@ -163,11 +163,20 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 - **Fix**: Pin the service `spec.clusterIP` in the Service manifest and use that IP in the PV's `nfs.server` field. kube-proxy's iptables rules on each node forward ClusterIP traffic to the current pod IP, providing transparent HA routing.
 
 ### Static NFS PV breaks after Longhorn PVC is deleted and recreated
-- **Symptom**: Worker pod can't mount `streaming-media` or `transcode` after a PVC was deleted/recreated; volume mount hangs or fails with "connection refused".
+- **Symptom**: Plex pod on w3 can't mount `plex-config` or `streaming-media` after a PVC was deleted/recreated; volume mount hangs or fails with "connection refused".
 - **Cause**: Longhorn RWX volumes use share-manager pods, each with their own Service. Deleting a PVC destroys that Service and creates a new one on recreation — with a **new ClusterIP**. The static PV still points to the old, now-defunct IP.
 - **Fix**: After recreating a Longhorn RWX PVC, get the new share-manager Service ClusterIP:
   ```bash
   kubectl get svc -n longhorn-system | grep share-manager
   ```
   Then update the corresponding static PV's `spec.nfs.server` field and commit. This only applies to volumes accessed by w3 (which lacks the Longhorn CSI driver); w1/w2 use CSI directly and are unaffected.
-- **Prevention**: Treat these PVCs as permanent (never delete unless decommissioning ClusterPlex). Use `persistentVolumeReclaimPolicy: Retain` on all associated PVs.
+- **Prevention**: Treat `pvc-plex-config` and `pvc-streaming-media` as permanent. Use `persistentVolumeReclaimPolicy: Retain` on all associated static PVs.
+
+### Longhorn share-manager shuts down when no CSI consumers exist
+- **Symptom**: Plex pod on w3 loses `/config` with NFS mount errors; `pvc-nfs-plex-config` returns connection refused.
+- **Cause**: Longhorn only keeps share-manager running while at least one pod has the volume CSI-mounted. Plex on w3 uses a static NFS PV (not CSI — w3 is LXC and cannot use Longhorn iSCSI). With no CSI mounts, Longhorn detects "no consumers" and shuts down share-manager → NFSv4 export disappears.
+- **Fix**: The `plex-config-holder` Deployment on w1/w2 CSI-mounts `pvc-plex-config` permanently, keeping share-manager alive. Verify it's running: `kubectl get deployment plex-config-holder -n media`. If deleted accidentally, share-manager will stop within minutes.
+
+### w3 (Proxmox LXC) cannot use Longhorn CSI driver
+- **Cause**: Longhorn CSI uses iSCSI-backed block devices. LXC containers block the cgroup device access required for iSCSI, so the Longhorn CSI node plugin on w3 cannot attach volumes.
+- **Fix**: Any Longhorn RWX volume that w3 needs must be wrapped in a static NFS PV pointing at the share-manager ClusterIP. Requires the plex-config-holder trick above. This is a permanent architectural constraint — do not attempt to install Longhorn CSI on w3.
