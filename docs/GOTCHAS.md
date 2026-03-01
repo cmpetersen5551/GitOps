@@ -48,6 +48,22 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 - **Cause**: Consumer uses `emptyDir` instead of `hostPath` for the DFS volume, or uses wrong propagation direction
 - **Fix**: Consumer must use `hostPath: /mnt/dfs` with `mountPropagation: HostToContainer`
 
+---
+
+## Longhorn RecurringJobs
+
+### Recurring backup job runs but finds 0 volumes
+- **Symptom**: CronJob executes, but logs show "Found 0 volumes with recurring job {name}"
+- **Cause**: RecurringJob `spec.groups: []` (empty) doesn't match any volume label groups. Volumes are labeled `recurring-job-group.longhorn.io/default=enabled`
+- **Fix**: Set `groups: ["default"]` in RecurringJob spec to match the `default` label group on volumes
+- All Longhorn volumes get the `recurring-job-group.longhorn.io/default=enabled` label automatically on creation unless custom groups are defined
+
+### Multiple backup jobs each create redundant backups of all volumes
+- **Symptom**: 5 separate RecurringJobs each target all 9 volumes, creating 45 backups per night instead of 9
+- **Cause**: All volumes share the same label group; each job with matching `groups: ["default"]` targets all of them
+- **Fix**: Use a single consolidated RecurringJob instead of per-app jobs (see DECISIONS.md)
+- For single-purpose backup, one job scales better than trying to manage per-app schedules
+
 ### `noreparse` CIFS mount option causes failure
 - **Cause**: `noreparse` requires kernel 6.15+; cluster nodes run 6.12 (Debian 13) and 6.8 (Proxmox VE w3)
 - **Fix**: Remove `noreparse` from any CIFS mount options

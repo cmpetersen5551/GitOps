@@ -65,7 +65,7 @@
 | Traefik | kube-system | Deployment | Reverse proxy, ingress |
 | Descheduler | kube-system | CronJob | Every 5 min, RemovePodsViolatingNodeAffinity (enables failback to w1) |
 | Volume-Fencing | kube-system | CronJob | Every 2 min, prevents split-brain on storage node recovery |
-| Longhorn Backup | longhorn-system | RecurringJob | `plex-config-daily-backup`: nightly 3 AM → `nfs://192.168.1.29:/mnt/cache/longhorn_backup`, 7-day retention |
+| Longhorn Backup | longhorn-system | RecurringJob | `backup-all-volumes`: backs all 9 cluster volumes (config + data PVCs), nightly 3 AM UTC → `nfs://192.168.1.29:/mnt/cache/longhorn_backup`, 7-day retention |
 
 ---
 

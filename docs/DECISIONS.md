@@ -75,6 +75,24 @@ tolerations:
 
 ---
 
+## Longhorn Backups
+
+**Chosen**: Single consolidated RecurringJob backing all volumes (2026-03-01)  
+**Rejected**:
+- Per-app backup jobs (sonarr, radarr, prowlarr, profilarr) — unnecessary complexity; all volumes share the same label group
+- Empty groups selector (`groups: []`) — doesn't target any volumes; must specify matching label group name
+
+**Architecture**:
+- One RecurringJob `backup-all-volumes` targets all volumes labeled `recurring-job-group.longhorn.io/default=enabled`
+- All 9 Longhorn volumes (config + data) backed up in single nightly run (3 AM UTC)
+- 7-day retention, incremental snapshots stored on NFS target `nfs://192.168.1.29:/mnt/cache/longhorn_backup`
+- Snapshot naming: `backup-a-{uuid}` (prefix from first 7 chars of job name)
+- Appropriate for 2-node homelab; simpler than separate schedules per app
+
+**Note**: RecurringJob `groups` field must match a volume's `recurring-job-group.longhorn.io/{group-name}` label to target it. Empty `groups: []` is effectively a no-op.
+
+---
+
 ## DFS Sharing (RealDebrid FUSE mount to consumer pods)
 
 **Chosen**: Direct FUSE mount propagation via hostPath Bidirectional (2026-02-28)

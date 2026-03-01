@@ -19,25 +19,33 @@ Both the **Live TV stack** and **C# automation apps** require storing credential
 
 ### 1.1 Backups — Extend Longhorn Recurring Jobs
 
-**Scope**: Protect sonarr, radarr, prowlarr, profilarr configs.
+**Status**: ✅ COMPLETED (2026-03-01)
 
-**Current state**: Only `plex-config` has a recurring backup job defined (`recurring-backup-plex` in `clusters/homelab/infrastructure/longhorn/recurring-backup-plex.yaml`).
+**Scope**: Protect all Longhorn volumes (9 total) with nightly automated backups.
 
-**Implementation**:
-- Follow the pattern from `recurring-backup-plex.yaml`
-- Create 4 new `RecurringJob` manifests (sonarr, radarr, prowlarr, profilarr)
-- Target PVCs: `config-sonarr-0`, `config-radarr-0`, `config-prowlarr-0`, `config-profilarr-0`
-- Backup destination: same NFS target (`nfs://192.168.1.29:/mnt/cache/longhorn_backup`)
-- Schedule: nightly 3 AM, 7-day retention
-- File location: `clusters/homelab/infrastructure/longhorn/`
-- Reference: `clusters/homelab/infrastructure/longhorn/recurring-backup-plex.yaml` for exact syntax
+**What was delivered** (optimized approach):
+- Single consolidated `RecurringJob` named `backup-all-volumes` (not per-app jobs)
+- Backs all 9 cluster volumes labeled `recurring-job-group.longhorn.io/default=enabled` in one nightly run
+- Schedule: 3:00 AM UTC daily
+- Retention: 7 daily backups, with automatic cleanup of oldest
+- Destination: `nfs://192.168.1.29:/mnt/cache/longhorn_backup` (incremental snapshots)
+- Snapshot naming: `backup-a-{uuid}` (from job name prefix)
+- File: `clusters/homelab/infrastructure/longhorn/recurring-backup-all.yaml`
 
-**Verification**:
-- All 5 backups appear in Longhorn UI under "Backup" → "Backup Volumes"
-- Cron schedule shows correct timing
-- After 24 hours, verify first backup completed successfully
+**Why consolidated instead of per-app**: All volumes share the same label group (`default`). Separate per-app jobs would redundantly back all 9 volumes 5 times per night (wasteful). Single job is simpler, faster, and appropriate for homelab.
 
-**Effort**: ~30 min. Quick win.
+**Issue & fix during implementation**:
+- Initial attempt with 4 app-specific jobs + `groups: []` → found 0 volumes (groups selector was empty)
+- Root cause: RecurringJob must specify matching volume group label name in `spec.groups` field
+- Solution: Changed to `groups: ["default"]` and consolidated to single job
+
+**Verification** (test run completed):
+- Deployed and tested with manual job trigger
+- All 9 volumes backed up successfully (~260 MB composite backup)
+- First scheduled run: 2026-03-02 at 3:00 AM UTC
+- Longhorn UI shows completed backups with `backup-a-` prefix
+
+**Effort**: ~30 min initial + 20 min troubleshooting + 10 min optimization = 60 min total
 
 ---
 
