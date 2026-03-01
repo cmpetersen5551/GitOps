@@ -162,6 +162,25 @@ Official image. `ghcr.io/cowboy/decypharr` and `sirrobot01/decypharr` are wrong/
 
 ---
 
+## Pulsarr (Plex Watchlist Automation)
+
+**Chosen**: Single StatefulSet, SQLite, longhorn-simple RWO PVC, cluster-internal service URLs (2026-03-01)
+
+**Architecture**:
+- StatefulSet on w1/w2 (HA affinity, same pattern as sonarr/radarr)
+- `data-pulsarr-0` PVC (1Gi, longhorn-simple RWO) — stores SQLite DB with Plex tokens, API keys, routing rules
+- Service exposes port 80 → targetPort 3003 (app's native port)
+- **Key config**: `port=80` (external/webhook port via Service), `listenPort=3003` (internal bind), `baseUrl=http://pulsarr.media.svc.cluster.local` (no port suffix)
+- Sonarr/Radarr URLs in pulsarr UI: use port 80 service (`http://sonarr.media.svc.cluster.local`, `http://radarr.media.svc.cluster.local`)
+- Webhook callback is cluster-internal → survives pod failover (ClusterIP stable)
+
+**Rejected**:
+- `port=3003` as external port — Kubernetes Service only exposes 80; Sonarr/Radarr webhook callbacks time out on 3003
+- `baseUrl` with `:3003` suffix — same problem; webhook URLs must match what the Service exposes
+- Health probes — all endpoints return 401 until Plex auth is set up via UI; omit probes entirely
+
+---
+
 ## Traefik / Ingress
 
 **Service port convention**: All app Services expose port `80` externally, map to app's native port via targetPort.  

@@ -1,6 +1,6 @@
 # Cluster State
 
-**Last Updated**: 2026-02-28  
+**Last Updated**: 2026-03-01  
 **Branch**: main  
 **Status**: ✅ Operational
 
@@ -32,6 +32,7 @@
 | plex-0 | k3s-w3 | lscr.io/linuxserver/plex:latest | pvc-nfs-plex-config, pvc-nfs-streaming-media, pvc-nfs-dfs, pvc-media-nfs |
 | plex-config-holder | k3s-w1 | busybox:latest | pvc-plex-config (CSI, keeps share-manager alive) |
 | plex-nfs-server | k3s-w1 | erichough/nfs-server | — (re-exports /mnt/dfs FUSE for w3) |
+| pulsarr-0 | k3s-w1 | lakker/pulsarr:latest | data-pulsarr-0 (1Gi RWO) |
 
 ---
 
@@ -51,6 +52,7 @@
 | pvc-nfs-plex-config | 10Gi | static NFS | plex-0 (/config via share-manager NFSv4) |
 | pvc-nfs-streaming-media | — | static NFS | plex-0 (/mnt/streaming-media via share-manager NFSv4) |
 | pvc-nfs-dfs | — | static NFS | plex-0 (/mnt/dfs via NFS server pod) |
+| data-pulsarr-0 | 1Gi | longhorn-simple (RWO) | pulsarr (SQLite DB + config) |
 
 ---
 
@@ -79,9 +81,10 @@
 | http://decypharr-download.homelab | decypharr-download | 8282 |
 | http://plex.homelab | plex | 32400 |
 | http://longhorn.homelab | longhorn-ui | — |
+| http://pulsarr.homelab | pulsarr | 3003 |
 
 ---
 
 ## Pending (Not Yet Deployed)
 
-- Phase 8: Pulsarr (Plex watchlist → Sonarr/Radarr auto-request)
+- Nothing currently pending

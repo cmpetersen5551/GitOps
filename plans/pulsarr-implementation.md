@@ -1,7 +1,8 @@
 # Pulsarr Implementation Plan
 
 **Date**: February 28, 2026  
-**Status**: Planning Phase  
+**Completed**: March 1, 2026  
+**Status**: ✅ Deployed & Operational  
 **Target Deployment**: k3s + Flux v2, 2-node HA cluster (w1/w2 primary/backup)
 
 ---
@@ -459,9 +460,11 @@ kubectl logs -f -n media pulsarr-0
 
 ## Gotchas & Safety Checks
 
-### 1. Webhook Callback Address
-- ✅ Use `http://pulsarr.media.svc.cluster.local:3003` (not `localhost` or external ingress)
+### 1. Webhook Callback Address (CORRECTED FROM PLAN)
+- ✅ Use `http://pulsarr.media.svc.cluster.local` with **no port suffix** (port 80, via Service)
+- ❌ Do NOT use `:3003` in the baseUrl — the Kubernetes Service only exposes port 80; Sonarr/Radarr timeout trying to connect on 3003
 - ❌ Do NOT use `http://pulsarr.homelab` for webhooks (external loop-back issues)
+- ConfigMap must set `port=80` (external) and `listenPort=3003` (internal bind) — see pulsarr docs on port vs listenPort
 - Test: After configuring Sonarr, pulsarr will show webhook status; green = good
 
 ### 2. Health Probes
@@ -672,9 +675,22 @@ After pod is running and accessible:
 
 ## Status
 
-**Current Phase**: Planning (this document)  
-**Next Phase**: Create manifests + implement (pending approval)  
-**Estimated Implementation Time**: ~20-30 minutes (all 5 files, copy-paste from templates above)  
-**Estimated First-Time Setup**: ~15 minutes (Plex PIN, Sonarr/Radarr pairing)  
+**Current Phase**: ✅ Complete  
 
-**Ready to proceed?** → Create manifests in `clusters/homelab/apps/media/pulsarr/` and commit to git.
+### Deployment Issues Encountered & Resolved
+
+1. **VolumeClaimTemplate name conflict** — Original plan named the template `config`, which conflicted with the ConfigMap volume also named `config`. Renamed template to `data` → PVC becomes `data-pulsarr-0`.
+
+2. **Port misconfiguration** — Plan specified `port=3003` and `baseUrl=...cluster.local:3003`. The Kubernetes Service only exposes port 80 (→ targetPort 3003). Sonarr/Radarr webhook callbacks timed out on 3003. Fixed: `port=80`, `listenPort=3003`, `baseUrl=http://pulsarr.media.svc.cluster.local` (no port).
+
+3. **Orphaned PVC** — First failed pod creation left behind `config-pulsarr-0` PVC. Manually deleted after fix.
+
+4. **UI root folder dropdown cache** — Browser cache caused some Radarr root folders to not appear in pulsarr UI. Fixed by hard refresh (Cmd+Shift+R).
+
+### Final Working Configuration
+- Pod: `pulsarr-0` running on k3s-w1
+- PVC: `data-pulsarr-0` (1Gi, longhorn-simple)
+- Plex: linked via PIN auth
+- Sonarr: `http://sonarr.media.svc.cluster.local` (port 80) ✅
+- Radarr: `http://radarr.media.svc.cluster.local` (port 80) ✅
+- Webhooks: configured and active in both Sonarr and Radarr

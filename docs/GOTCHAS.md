@@ -98,6 +98,25 @@ Indexed problem-solution pairs. Each entry: symptom → root cause → fix. No n
 - **Cause**: MetalLB VIP pool subnet overlaps with a connected interface subnet (e.g., both on `192.168.1.0/24`); connected routes take precedence over BGP routes
 - **Fix**: VIP pool **must** be a separate subnet (e.g., `192.168.100.0/24`) not assigned to any physical interface on the UDM
 
+---
+
+## Pulsarr
+
+### Pulsarr can't reach Sonarr/Radarr ("ConnectionRefused" on localhost:8989 / localhost:7878)
+- **Symptom**: Logs show `"path": "http://localhost:8989/api/v3/notification"` with `ConnectionRefused`
+- **Cause**: Pulsarr defaults to `localhost` when no Sonarr/Radarr URL is configured. Must be set via UI using cluster-internal DNS.
+- **Fix**: In pulsarr UI, set Sonarr URL to `http://sonarr.media.svc.cluster.local` and Radarr URL to `http://radarr.media.svc.cluster.local` (port 80 — the service port, not the app port)
+
+### Pulsarr webhook callback times out from Sonarr/Radarr ("Operation timed out")
+- **Symptom**: Logs show `"Operation timed out (pulsarr.media.svc.cluster.local:3003)"` when Sonarr/Radarr try to reach pulsarr
+- **Cause**: Pulsarr was configured with `port=3003` and used that in webhook URLs, but the Kubernetes Service only exposes port 80 (→ targetPort 3003). Sonarr/Radarr tried to connect on port 3003 which has no service listener.
+- **Fix**: In ConfigMap `.env`, set `port=80` (external service port) and `listenPort=3003` (internal bind port). `baseUrl` should omit the port (defaults to 80). Per pulsarr docs: `port` = external/webhook port, `listenPort` = internal bind port.
+
+### Pulsarr root folder dropdown missing entries (browser issue)
+- **Symptom**: Pulsarr UI shows some root folders (e.g., tvshows) but not others (e.g., movies), despite all being accessible via Radarr API
+- **Cause**: Browser cache stale UI state
+- **Fix**: Hard refresh (Cmd+Shift+R) or clear browser cache. The API returns all folders correctly; it's a frontend rendering issue.
+
 ### `ip prefix-list` entries not taking effect on UDM
 - **Cause**: In UniFi's FRR config, `ip prefix-list` entries must appear **after** the `router bgp` block
 - **Fix**: Reorder config so `router bgp` comes first, then prefix-list definitions below it
