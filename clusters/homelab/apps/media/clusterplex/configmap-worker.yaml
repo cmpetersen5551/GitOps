@@ -16,3 +16,5 @@ data:
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
   EAE_SUPPORT: "1"
+  # Intel QuickSync hardware acceleration — passed to ffmpeg on the worker (w3)
+  FFMPEG_HWACCEL: qsv

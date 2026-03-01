@@ -22,6 +22,7 @@ spec:
         fsGroup: 0
         runAsNonRoot: false
         runAsUser: 0
+        supplementalGroups: [44]  # render group — required for /dev/dri access on Debian
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -79,6 +80,8 @@ spec:
               mountPath: /transcode
             - name: codecs
               mountPath: /codecs
+            - name: dri
+              mountPath: /dev/dri
           resources:
             requests:
               cpu: 500m
@@ -125,3 +128,7 @@ spec:
             claimName: clusterplex-transcode-w3
         - name: codecs
           emptyDir: {}
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            type: Directory
