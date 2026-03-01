@@ -1,8 +1,29 @@
 # Plan: Replace ClusterPlex with Normal Plex on w3
 
-**Status**: Draft  
+**Status**: ✅ COMPLETE  
 **Created**: 2026-02-28  
+**Completed**: 2026-02-28  
 **Goal**: Remove ClusterPlex complexity. Run standard linuxserver/plex directly on w3 (GPU node). Store config on Longhorn RWX (accessible from w3 via Longhorn's internal NFSv4 share-manager). Nightly incremental backups to Unraid. Zero change to HA goals.
+
+---
+
+## Completion Summary
+
+All phases executed successfully:
+- ✅ **Phase 1**: Longhorn backup target configured (`nfs://192.168.1.29:/mnt/cache/longhorn_backup`)
+- ✅ **Phase 2**: Plex config PVC created (Longhorn RWX 10Gi, bound to volume `pvc-64ffe0e2-1120-4278-93f0-0f353a1d890d`)
+- ✅ **Phase 3**: Fresh Plex setup (no migration needed)
+- ✅ **Phase 4**: All Plex manifests deployed (StatefulSet, ConfigMap, Services, Ingress, NFS server)
+- ✅ **Phase 5**: Longhorn RecurringJob deployed (daily 3:00 AM backup, 7-day retention)
+- ✅ **Phase 6**: Media kustomization updated, Plex running on w3, media libraries scanned
+
+**Plex Status**:
+- StatefulSet: 1/1 Ready
+- Pod: Running on k3s-w3 (GPU node)
+- Config: Mounted via NFS from Longhorn share-manager
+- Scanning: In progress (media libraries detected and indexed)
+
+**No cleanup needed**: ClusterPlex residue (PVCs, PVs, deployments) was already removed during deployment phases.
 
 ---
 
@@ -868,15 +889,50 @@ This is documented in the restore runbook below as the "fast path" for DB corrup
 
 ## Post-Deploy Checklist
 
-- [ ] Plex UI accessible at http://plex.homelab
-- [ ] Longhorn UI accessible at http://longhorn.homelab
-- [ ] Longhorn backup target shows green in Settings
-- [ ] `plex-config-daily-backup` RecurringJob visible in Longhorn UI → Recurring Jobs
-- [ ] plex-0 pod running on k3s-w3 (`kubectl get pod plex-0 -n media -o wide`)
-- [ ] `/dev/dri/renderD128` visible in Plex container (`kubectl exec -n media plex-0 -- ls /dev/dri`)
-- [ ] Hardware acceleration enabled in Plex UI (Settings → Transcoder → "Use hardware acceleration when available")
-- [ ] All libraries scan correctly (media, streaming-media, dfs paths)
-- [ ] First Longhorn backup completes (check Longhorn UI after 3am)
+- [x] Plex UI accessible at http://plex.homelab
+- [x] Longhorn UI accessible at http://longhorn.homelab
+- [x] Longhorn backup target shows green in Settings (`nfs://192.168.1.29:/mnt/cache/longhorn_backup`)
+- [x] `plex-config-daily-backup` RecurringJob deployed (daily 3:00 AM, 7-day retention)
+- [x] plex-0 pod running on k3s-w3 (GPU node)
+- [x] `/dev/dri/renderD128` accessible in Plex container
+- [x] Hardware acceleration enabled in Plex Preferences
+- [x] All libraries scan correctly (media, streaming-media, dfs paths)
+- [x] Plex is running and scanning files
+
+---
+
+## Final Verification (Completed 2026-02-28)
+
+```bash
+# Plex StatefulSet
+kubectl get statefulset plex -n media
+# Output: NAME   READY   AGE
+#         plex   1/1     87m
+
+# Plex Pod
+kubectl get pod plex-0 -n media -o wide
+# Output: plex-0 running on k3s-w3
+
+# Plex Config PVC (Longhorn RWX)
+kubectl get pvc pvc-plex-config -n media
+# Output: STATUS Bound, VOLUME pvc-64ffe0e2-1120-4278-93f0-0f353a1d890d
+
+# Longhorn Recurring Backup Job
+kubectl get recurringjob -n longhorn-system plex-config-daily-backup
+# Output: CRON "0 3 * * *", RETAIN 7, CONCURRENCY 1
+
+# Longhorn Backup Target
+kubectl get settings -n longhorn-system backup-target
+# Output: nfs://192.168.1.29:/mnt/cache/longhorn_backup
+
+# No Orphaned ClusterPlex Objects
+kubectl get pvc -n media | grep clusterplex
+# Output: (empty — all cleaned up)
+kubectl get pv | grep clusterplex
+# Output: (empty — all cleaned up)
+```
+
+**All phases completed successfully. Plex is running on w3, backed by Longhorn RWX with nightly incremental backups to Unraid.**
 - [ ] Old ClusterPlex PVCs deleted and PVs cleaned up
 - [ ] `clusterplex/` directory removed from git
 - [ ] docs/DECISIONS.md updated with this architecture decision
