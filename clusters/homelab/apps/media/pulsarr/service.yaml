@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulsarr
+  namespace: media
+  labels:
+    app: pulsarr
+spec:
+  selector:
+    app: pulsarr
+  ports:
+    - port: 80
+      targetPort: 3003
+      protocol: TCP
+      name: http
+  type: ClusterIP

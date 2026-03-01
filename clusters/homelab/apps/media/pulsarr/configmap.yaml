@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pulsarr-config
+  namespace: media
+  labels:
+    app: pulsarr
+data:
+  .env: |
+    # Core Configuration
+    port=3003
+    listenPort=3003
+    baseUrl=http://pulsarr.media.svc.cluster.local:3003
+    TZ=America/Chicago
+    logLevel=info
+    enableConsoleOutput=true
+    enableRequestLogging=false
+    
+    # Authentication
+    # Options: required (default), requiredExceptLocal, disabled
+    authenticationMethod=requiredExceptLocal
+    
+    # Database (SQLite by default, lives in /app/data)
+    # No extra config needed
+    
+    # Apprise (optional, add later if enabled)
+    # appriseUrl=http://apprise:8000
+    
+    # Cookie Security (set true only if serving over HTTPS)
+    cookieSecured=false

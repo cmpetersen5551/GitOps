@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pulsarr
+  namespace: media
+  labels:
+    app: pulsarr
+spec:
+  serviceName: pulsarr-headless  # Links to headless service for stable DNS
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pulsarr
+  template:
+    metadata:
+      labels:
+        app: pulsarr
+        streaming-stack: "true"   # For pod affinity grouping with other media apps
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: config-pulsarr-0  # Created by volumeClaimTemplate
+        - name: config
+          configMap:
+            name: pulsarr-config
+            items:
+              - key: .env
+                path: .env
+      containers:
+        - name: pulsarr
+          image: lakker/pulsarr:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3003
+              name: http
+          env:
+            # Load .env from ConfigMap
+            - name: dataDir
+              value: "/app/data"
+          envFrom:
+            - configMapRef:
+                name: pulsarr-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: config
+              mountPath: /app/.env
+              subPath: .env
+          # Health probes: Omit until auth is configured
+          # All endpoints return 401 until Plex account is linked via UI
+      # Do NOT add affinity here — patches will inject it
+  updateStrategy:
+    type: OnDelete  # Prevents accidental restarts during deployments
+  podManagementPolicy: OrderedReady
+  volumeClaimTemplates:
+    - metadata:
+        name: config
+        labels:
+          app: pulsarr
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn-simple
+        resources:
+          requests:
+            storage: 1Gi

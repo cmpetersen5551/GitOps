@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: media
+
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - service-headless.yaml
+  - ingress.yaml
+  - configmap.yaml
+
+# Inherit HA patches from parent directory
+patches:
+  - path: ../patches/ha-affinity.yaml
+    target:
+      kind: StatefulSet
+      name: pulsarr
+  - path: ../patches/statefulset-strategy.yaml
+    target:
+      kind: StatefulSet
+      name: pulsarr
+  - path: ../patches/disable-service-links.yaml
+    target:
+      kind: StatefulSet
+      name: pulsarr
