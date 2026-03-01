@@ -31,21 +31,33 @@
   "packageRules": [
     {
       "description": "linuxserver images: only track clean X.Y.Z short tags, ignore full build tags like 1.43.0.10492-121068a07-ls294",
-      "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["^(lscr\\.io/linuxserver|linuxserver)/"],
+      "matchDatasources": [
+        "docker"
+      ],
       "versioning": "semver",
-      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/"
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/",
+      "matchPackageNames": [
+        "/^(lscr\\.io/linuxserver|linuxserver)//"
+      ]
     },
     {
       "description": "profilarr uses v-prefixed semver tags",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["santiagosayshey/profilarr"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "santiagosayshey/profilarr"
+      ],
       "versioning": "semver"
     },
     {
       "description": "pulsarr: only track stable releases, ignore -beta and -node tags",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["lakker/pulsarr"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lakker/pulsarr"
+      ],
       "versioning": "semver",
       "allowedVersions": "!/beta|node/"
     },
@@ -73,22 +85,22 @@
       "matchDatasources": [
         "helm"
       ],
-      "matchPackagePatterns": [
-        "^flux"
-      ],
       "groupName": "flux-updates",
-      "automerge": false
+      "automerge": false,
+      "matchPackageNames": [
+        "/^flux/"
+      ]
     },
     {
       "description": "Group Longhorn updates",
       "matchDatasources": [
         "helm"
       ],
-      "matchPackagePatterns": [
-        "^longhorn"
-      ],
       "groupName": "longhorn-updates",
-      "automerge": false
+      "automerge": false,
+      "matchPackageNames": [
+        "/^longhorn/"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
