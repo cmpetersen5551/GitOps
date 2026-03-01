@@ -31,8 +31,15 @@ spec:
           env:
             - name: TZ
               value: "America/Chicago"
+            - name: PORT
+              value: "8000"
+            - name: BASE_URL
+              value: "http://eplustv.homelab"
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
             # Note: eplustv credentials are configured via web UI, not env vars.
-            # Supported env vars: BASE_URL, PUID, PGID, PORT only.
           resources:
             requests:
               cpu: 200m
