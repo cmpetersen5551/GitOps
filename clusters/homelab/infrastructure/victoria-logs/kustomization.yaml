@@ -18,10 +18,18 @@ patchesJson6902:
         path: /spec/template/spec/nodeSelector
         value:
           node.longhorn.io/create-default-disk: "true"
-      - op: add
+      - op: replace
         path: /spec/template/spec/tolerations
         value:
           - key: node.longhorn.io/storage
             operator: Equal
             value: enabled
             effect: NoSchedule
+          - effect: NoExecute
+            key: node.kubernetes.io/not-ready
+            operator: Exists
+            tolerationSeconds: 300
+          - effect: NoExecute
+            key: node.kubernetes.io/unreachable
+            operator: Exists
+            tolerationSeconds: 300
