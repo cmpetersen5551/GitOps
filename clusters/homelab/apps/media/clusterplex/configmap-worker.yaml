@@ -18,8 +18,8 @@ data:
   # (software decode → hardware encode) does work and is triggered by enabling hardware
   # transcoding in Plex UI settings.
   DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest|lscr.io/linuxserver/mods:universal-package-install
-  INSTALL_PACKAGES: intel-media-va-driver-non-free
-  LIBVA_DRIVER_NAME: iHD
+  INSTALL_PACKAGES: i965-va-driver libva-drm2
+  LIBVA_DRIVER_NAME: i965
   ORCHESTRATOR_URL: http://clusterplex-orchestrator:3500
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
