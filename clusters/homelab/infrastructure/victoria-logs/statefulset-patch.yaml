@@ -9,6 +9,11 @@ spec:
     spec:
       nodeSelector:
         node.longhorn.io/create-default-disk: "true"
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
