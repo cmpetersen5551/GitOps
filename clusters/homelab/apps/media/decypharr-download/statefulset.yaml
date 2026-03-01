@@ -38,7 +38,7 @@ spec:
       # Decypharr main container (NFS-only download mode - no FUSE)
       containers:
         - name: decypharr
-          image: cy01/blackhole:fenrir
+          image: cy01/blackhole:beta
           imagePullPolicy: IfNotPresent
           command: ["/usr/bin/decypharr", "--config", "/config"]
           ports:

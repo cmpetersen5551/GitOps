@@ -40,7 +40,7 @@ spec:
       # via HostToContainer (MS_SLAVE) — no SMB/CIFS layer needed.
       containers:
         - name: decypharr
-          image: cy01/blackhole:fenrir
+          image: cy01/blackhole:beta
           imagePullPolicy: IfNotPresent
           command: ["/usr/bin/decypharr"]
           args: ["--config", "/config"]
