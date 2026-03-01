@@ -8,10 +8,10 @@
 
 ## Overview
 
-Three strategic initiatives converge on a critical blocker: secret management. This plan prioritizes backfilling gaps (backups), automating updates (Renovate), establishing secure credential handling (SOPS), then executing the two major features (C# apps, Live TV stack).
+This plan prioritizes quick wins (backups, dependency automation), observability foundations, then deploys Live TV services with secret management. This order reflects the fact that UI-configured services (Plex, Sonarr, etc.) don't need SOPS, while pluto-for-channels and other Live TV services do.
 
 ### Key Insight
-Both the **Live TV stack** and **C# automation apps** require storing credentials securely in git. This blocks both tracks until **SOPS + age** is in place.
+Only the **Live TV stack** (pluto-for-channels, EPlusTV, etc.) requires encrypted secrets in git. C# automation apps are optional. This lets you deploy observability and optional tooling before implementing SOPS, then add secrets management just before bringing Live TV online.
 
 ---
 
@@ -87,13 +87,13 @@ Both the **Live TV stack** and **C# automation apps** require storing credential
 
 ---
 
-## Phase 2: Security Foundation (Week 2–3)
+## Phase 2: Observability Foundation (Weeks 2–3)
 
-### 2.1 SOPS + age Secret Management
+### 2.1 Monitoring Stack — kube-prometheus-stack + Loki + Grafana
 
-**Scope**: Enable encrypted secrets in git, Flux-native decryption at deploy time.
+**Scope**: Node metrics, pod logs, Longhorn health, optional C# job logs.
 
-**Why now**: Both Live TV stack and C# apps need credentials (Pluto login, sportsebook keys, Sonarr API keys). This blocks both.
+**Why**: Foundational observability before adding 5+ live TV services. Helps diagnose issues with Channels DVR, diagnostics, and advanced service health.
 
 **Implementation**:
 1. **Generate age keypair** locally:
@@ -154,70 +154,9 @@ Both the **Live TV stack** and **C# automation apps** require storing credential
 
 ---
 
-## Phase 3: Observability Foundation (Week 3–4)
+## Phase 3: C# App Platform + First App (Optional, Weeks 3–5)
 
-### 3.1 Monitoring Stack — kube-prometheus-stack + Loki + Grafana
-
-**Scope**: Node metrics, pod logs, Longhorn health, custom C# job logs.
-
-**Why**: Without log aggregation, C# job output vanishes when the pod terminates. Also foundational before adding 5+ live TV services.
-
-**Implementation**:
-1. **kube-prometheus-stack** (Prometheus + Grafana + AlertManager):
-   - `HelmRelease` in `clusters/homelab/infrastructure/`
-   - Deploy to `monitoring` namespace
-   - Storage: Longhorn RWO (10Gi for Prometheus TSDB, 5Gi for Grafana)
-   - Traefik ingress for Grafana (`grafana.homelab`)
-
-2. **Loki** (log aggregation):
-   - `HelmRelease` in `clusters/homelab/infrastructure/`
-   - Deploy to `monitoring` namespace
-   - Storage: Longhorn RWO (20Gi for log chunks)
-   - No ingress needed (Grafana queries it internally)
-
-3. **Promtail** (log collector):
-   - `DaemonSet` on all nodes
-   - Scrapes pod logs, sends to Loki
-   - Already included in many kube-prometheus-stack Helm charts
-
-4. **Dashboards**:
-   - Longhorn volume health (CPU, replica status, backup success)
-   - Node CPU, memory, disk usage
-   - Sonarr/Radarr API response times (if instrumented)
-   - C# job execution times and error rates
-
-5. **Alerting** (simple rules):
-   - PVC usage >85%
-   - Node CPU >80%
-   - Pod restart count >0 in 1 hour
-   - Longhorn replica rebuild failures
-
-**Reference files to create**:
-- `clusters/homelab/infrastructure/monitoring/` (new folder)
-  - `kustomization.yaml`
-  - `kube-prometheus-helmrelease.yaml`
-  - `loki-helmrelease.yaml`
-  - `namespace.yaml`
-  - `pvc-prometheus.yaml` (Longhorn RWO, 10Gi)
-  - `pvc-loki.yaml` (Longhorn RWO, 20Gi)
-  - `pvc-grafana.yaml` (Longhorn RWO, 5Gi) — if using persistent storage
-  - `ingress-grafana.yaml` (Traefik, `grafana.homelab`)
-
-**Verification**:
-- Grafana accessible at `http://grafana.homelab`
-- Pre-built dashboards available (Prometheus, Longhorn)
-- Pod logs visible in Loki data source
-- First custom C# job logs appear in Loki after Phase 4
-
-**Effort**: ~2–3 hours. Heavy lifting on Helm values tuning.
-
-**Blocking dependency for**: Phase 4 (logs for C# jobs) and Phase 5 (observability during Live TV expansion).
-
----
-
-## Phase 4: C# App Platform + First App (Weeks 4–6)
-
-### 4.1 Repository: Create `sonarr-utils` repo
+### 3.1 Repository: Create `sonarr-utils` repo
 
 **Scope**: First C# app — root folder / tag manager for Sonarr+Radarr.
 
@@ -272,7 +211,7 @@ Both the **Live TV stack** and **C# automation apps** require storing credential
    - Push to GHCR: `ghcr.io/cmpetersen5551/sonarr-utils:v1.0.0`
    - Tag as `:latest`
 
-### 4.2 Business Logic: Root Folder + Tag Manager
+### 3.2 Business Logic: Root Folder + Tag Manager
 
 **Purpose**: Utility to bulk-update Sonarr/Radarr root folders and tags.
 
@@ -302,7 +241,7 @@ sonarr-utils migrate-root-folder \
 - Advanced: dry-run mode → actual execution
 - Logging: every operation logged with structured Serilog output
 
-### 4.3 Deploy to K8s
+### 3.3 Deploy to K8s
 
 **K8s manifests** (in GitOps repo):
 1. `clusters/homelab/apps/media/sonarr-utils/`
@@ -356,7 +295,70 @@ sonarr-utils migrate-root-folder \
 
 ---
 
-## Phase 5: Live TV Stack (Weeks 6–8)
+## Phase 4: Secret Management with SOPS (Week 5)
+
+### 4.1 SOPS + age Secret Management
+
+**Scope**: Enable encrypted secrets in git, Flux-native decryption at deploy time.
+
+**Why now**: Live TV services (pluto-for-channels, EPlusTV, etc.) require storing credentials securely in git. Implement SOPS immediately before deploying them.
+
+**Implementation**:
+1. **Generate age keypair** locally:
+   ```bash
+   age-keygen -o age.key
+   ```
+
+2. **Create K8s Secret from private key** (bootstrap):
+   ```bash
+   kubectl create secret generic sops-age \
+     --from-file=age.agekey=age.key \
+     -n flux-system
+   ```
+
+3. **Create `.sops.yaml` at repo root**:
+   ```yaml
+   creation_rules:
+     - path_regex: clusters/.*\.ya?ml$
+       encrypted_regex: ^(data|stringData)$
+       key_groups:
+         - age:
+             - <PUBLIC_KEY_OUTPUT_FROM_age-keygen>
+   ```
+
+4. **Create Flux `SecretProviderClass`** (or direct `SecretProviderClass/Secret` resources):
+   - Reference `sops-age` secret in `flux-system` namespace
+   - Flux automatically decrypts SOPS-sealed secrets on reconciliation
+
+5. **Encrypt first secret** (example: Pluto credentials):
+   ```bash
+   sops --encrypt clusters/homelab/apps/media/pluto-for-channels-secret.yaml > clusters/homelab/apps/media/pluto-for-channels-secret.enc.yaml
+   ```
+
+6. **Add to `.gitignore`**:
+   ```
+   age.key
+   *.dec.yaml
+   ```
+
+**Reference files to create**:
+- `.sops.yaml` (repo root)
+- Example encrypted secret in `clusters/homelab/apps/media/`
+- Flux `Kustomization` to auto-decrypt
+
+**Documentation**:
+- How to add a new secret (edit in plaintext, encrypt, commit)
+- How to decrypt locally for review (one-time before commit)
+- Age key recovery procedures
+
+**Verification**:
+- Encrypt a test value → commit → Flux reconciles → secret appears in cluster
+- Verify plaintext secret is NOT in git history
+- Test pod can read the secret environment variable
+
+**Effort**: ~1–2 hours. Done once, unlocks Live TV deployment.
+
+---
 
 ### 5.1 Channels DVR
 
@@ -485,20 +487,21 @@ resources:
 ## Delivery Order & Dependencies
 
 ```
-Phase 1: Backups + Renovate
+Phase 1: Backups + Renovate ✅
     ↓ (independent)
-Phase 2: SOPS
-    ↓ (BLOCKS Phases 4 & 5)
-Phase 3: Monitoring (in parallel with Phase 2)
+Phase 2: Monitoring (can overlap with Phase 1)
     ↓
-Phase 4: C# app platform (depends on SOPS + Monitoring)
-    ↓ (independent after Phase 2 & 3)
-Phase 5: Live TV stack (depends on SOPS, benefits from Monitoring)
+Phase 3: C# Apps [OPTIONAL — skip if not needed yet]
+    ↓ (independent after Phase 2)
+Phase 4: SOPS (right before Live TV)
+    ↓
+Phase 5: Live TV stack (depends on SOPS from Phase 4)
 ```
 
 **Parallelizable**:
-- Phase 1 + Phase 2 + Phase 3 can overlap
-- Phase 4 and Phase 5 can run in parallel after Phase 2 completes
+- Phase 1 + Phase 2 can overlap
+- Phase 3 is optional and can be skipped entirely
+- Phase 4 (SOPS) immediately precedes Phase 5 (Live TV)
 
 ---
 
@@ -508,21 +511,22 @@ Phase 5: Live TV stack (depends on SOPS, benefits from Monitoring)
 |-------|--------|-------|-------|
 | 1: Backups | 0.5 h | 0.5 h | **1 h** |
 | 1: Renovate | 0.75 h | 0.25 h | **1 h** |
-| 2: SOPS + age | 1.5 h | 0.5 h | **2 h** |
-| 3: Monitoring | 2.5 h | 1 h | **3.5 h** |
-| 4: C# app setup + first app | 10 h | 2–4 h | **12–14 h** |
-| 5: Live TV (5 services) | 5 h | 1–2 h | **6–8 h** |
-| **Total** | ~20 h | ~5 h | **~25 h (3–4 weeks part-time)** |
+| 2: Monitoring | 2.5 h | 1 h | **3.5 h** |
+| 3: C# apps (optional) | 10 h | 2–4 h | **12–14 h** |
+| 4: SOPS + age | 1.5 h | 0.5 h | **2 h** |
+| 5: Live TV (5 services) | 4 h | 1–2 h | **5–7 h** |
+| **Total (skipping Phase 3)** | ~9 h | ~3 h | **~12 h (1–2 weeks)** |
+| **Total (including Phase 3)** | ~19 h | ~5 h | **~24 h (3–4 weeks part-time)** |
 
 ---
 
 ## Summary
 
-1. **Backups + Renovate** (Week 1): Fast wins, no dependencies
-2. **SOPS** (Week 2): Unlocks credentials handling
-3. **Monitoring** (Week 2–3): Observability for everything that follows
-4. **C# platform** (Weeks 4–6): Invest in tooling, reusable pattern
-5. **Live TV** (Weeks 6–8): Deploy 5 services, integrate with Channels DVR
+1. **Backups + Renovate** (Week 1): Fast wins, no dependencies ✅
+2. **Monitoring** (Week 2): Observability for everything that follows
+3. **C# platform** (Weeks 3–5): Optional — invest in tooling if needed, reusable pattern
+4. **SOPS** (Week 5): Just-in-time secret management for Live TV services
+5. **Live TV** (Weeks 5–7): Deploy 5 services with SOPS-encrypted secrets, integrate with Channels DVR
 
-Each phase is scoped, has clear verification steps, and leaves the system in a healthy state.
+**Recommended path**: Skip Phase 3 for now, focus on Phases 1, 2, 4, 5. This gets you observability + Live TV in ~2 weeks instead of 4.
 
