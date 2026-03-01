@@ -89,68 +89,67 @@ Only the **Live TV stack** (pluto-for-channels, EPlusTV, etc.) requires encrypte
 
 ## Phase 2: Observability Foundation (Weeks 2–3)
 
-### 2.1 Monitoring Stack — kube-prometheus-stack + Loki + Grafana
+### 2.1 Centralized Logging — VictoriaLogs + Ingress
 
-**Scope**: Node metrics, pod logs, Longhorn health, optional C# job logs.
+**Status**: Planning phase (detailed plan: [plans/victoria-logs-deployment.md](plans/victoria-logs-deployment.md))
 
-**Why**: Foundational observability before adding 5+ live TV services. Helps diagnose issues with Channels DVR, diagnostics, and advanced service health.
+**Scope**: Centralized log aggregation for media apps (sonarr, plex, decypharr, radarr, etc.) + infrastructure components.
 
-**Implementation**:
-1. **Generate age keypair** locally:
-   ```bash
-   age-keygen -o age.key
-   ```
+**Why VictoriaLogs over Loki/Prometheus**:
+- **Simpler setup**: Single binary StatefulSet vs Loki's DaemonSet + Promtail sidecar complexity
+- **Lower resource overhead**: ~500 MB–1 GB RAM vs Loki's 1–2 GB
+- **Better high-cardinality handling**: Efficient log compression for pod-specific logs
+- **Smaller disk footprint**: ~15 GB/month vs Loki's ~20 GB/month
+- **Intuitive queries**: Regex/filter-based vs LogQL's domain-specific language
+- **No Grafana dependency**: Built-in VMUI web interface (`http://logs.homelab/vmui`) sufficient for debugging
+- **No metrics overhead**: Skip Prometheus entirely; only logs are useful for your homelab
 
-2. **Create K8s Secret from private key** (bootstrap):
-   ```bash
-   kubectl create secret generic sops-age \
-     --from-file=age.agekey=age.key \
-     -n flux-system
-   ```
+**What gets deployed**:
+1. **VictoriaLogs StatefulSet** (1 replica)
+   - Container: `victorialogs/victoria-logs`
+   - Storage: 100 Gi PVC on `longhorn-simple` (RWO)
+   - Retention: 7 days (auto-cleanup of older logs)
+   - Memory: 512Mi requests / 1Gi limits
+   - Log scrape: Kubelet `/var/log/pods/**` via filesd
 
-3. **Create `.sops.yaml` at repo root**:
-   ```yaml
-   creation_rules:
-     - path_regex: clusters/.*\.ya?ml$
-       encrypted_regex: ^(data|stringData)$
-       key_groups:
-         - age:
-             - <PUBLIC_KEY_OUTPUT_FROM_age-keygen>
-   ```
+2. **Ingress route** — `http://logs.homelab` → VMUI at `:9428/vmui`
 
-4. **Create Flux `SecretProviderClass`** (or direct `SecretProviderClass/Secret` resources):
-   - Reference `sops-age` secret in `flux-system` namespace
-   - Flux automatically decrypts SOPS-sealed secrets on reconciliation
+3. **Kustomization** — `clusters/homelab/infrastructure/victoria-logs/`
 
-5. **Encrypt first secret** (example: Pluto credentials):
-   ```bash
-   sops --encrypt clusters/homelab/apps/media/pluto-for-channels-secret.yaml > clusters/homelab/apps/media/pluto-for-channels-secret.enc.yaml
-   ```
+**Implementation steps**:
+1. Create HelmRelease + HelmRepository (Victoria Metrics helm charts)
+2. Create Ingress (Traefik, route to `:9428`)
+3. Create kustomization.yaml
+4. Deploy via Flux: `flux reconcile kustomization infrastructure --with-source`
+5. Verify logs flowing: Query `{namespace="media"}` in VMUI
 
-6. **Add to `.gitignore`**:
-   ```
-   age.key
-   *.dec.yaml
-   ```
+**Query examples** (simple, no LogQL needed):
+```
+{namespace="media"}                    # All media app logs
+{pod="sonarr*"}                        # Sonarr pod logs only
+{pod=~"(sonarr|radarr).*"}             # Sonarr + Radarr combined
+{pod=~".*"} | "error"                  # Text search: all errors across cluster
+{pod="plex*"} | "transcode"            # Plex transcoding logs
+```
 
-**Reference files to create**:
-- `.sops.yaml` (repo root)
-- Example encrypted secret in `clusters/homelab/apps/media/`
-- Flux `Kustomization` to auto-decrypt
+**Storage & retention**:
+- PVC size: 100 Gi (6-month buffer at ~15 GB/month)
+- Auto-labeled for nightly Longhorn backups (`recurring-job-group.longhorn.io/default=enabled`)
+- Node affinity: Preferred on w1 (primary storage node)
 
-**Documentation**:
-- How to add a new secret (edit in plaintext, encrypt, commit)
-- How to decrypt locally for review (one-time before commit)
-- Age key recovery procedures
+**Verification criteria**:
+- [ ] VictoriaLogs StatefulSet running (1 replica, Ready)
+- [ ] PVC bound to 100 Gi from longhorn-simple
+- [ ] Ingress active: `http://logs.homelab/vmui` loads
+- [ ] VMUI shows available labels (pod, namespace, container)
+- [ ] Can query `{namespace="media"}` and see recent logs from sonarr, radarr, plex, decypharr-*, etc.
+- [ ] Logs are < 5 min old for active pods
 
-**Verification**:
-- Encrypt a test value → commit → Flux reconciles → secret appears in cluster
-- Verify plaintext secret is NOT in git history
-- Test pod can read the secret environment variable
+**Effort**: ~30 min (manifests + deploy + test).
 
-**Effort**: ~1–2 hours. Done once, unlocks future work.
+**Blocking dependency for**: None (optional, but strongly recommended before Phase 4/5).
 
-**Blocking dependency for**: Phase 4 (C# apps) and Phase 5 (Live TV).
+**Future extension**: Add Grafana later if dashboards become needed (independent deployment, not required for basic logging).
 
 ---
 
