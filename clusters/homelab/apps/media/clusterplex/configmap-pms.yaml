@@ -26,3 +26,7 @@ data:
   # Traefik handles TLS termination; Plex should not redirect clients itself.
   # Without this, Plex sees X-Forwarded-Proto:https and redirects, causing an infinite loop.
   PLEX_PREFERENCE_secureConnections: "0"
+  # Force hardware-accelerated encoding even though PMS node has no GPU.
+  # PMS passes encode flags; the actual transcoding happens on the GPU worker.
+  PLEX_PREFERENCE_HardwareAcceleratedCodecs: "1"
+  PLEX_PREFERENCE_HardwareDevicePath: "/dev/dri/renderD128"

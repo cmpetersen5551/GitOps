@@ -82,6 +82,9 @@ spec:
               mountPath: /codecs
             - name: dri
               mountPath: /dev/dri
+            - name: dri-drivers
+              mountPath: /usr/lib/x86_64-linux-gnu/dri
+              readOnly: true
           resources:
             requests:
               cpu: 500m
@@ -131,4 +134,8 @@ spec:
         - name: dri
           hostPath:
             path: /dev/dri
+            type: Directory
+        - name: dri-drivers
+          hostPath:
+            path: /usr/lib/x86_64-linux-gnu/dri
             type: Directory

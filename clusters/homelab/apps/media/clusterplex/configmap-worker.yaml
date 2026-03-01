@@ -18,7 +18,7 @@ data:
   #   Settings → Transcoder → "Use hardware acceleration when available"
   DOCKER_MODS: ghcr.io/pabloromeo/clusterplex_worker_dockermod:latest
   LIBVA_DRIVER_NAME: iHD
-  LIBVA_DRIVERS_PATH: /usr/lib/plexmediaserver/Resources/lib/dri:/usr/lib/x86_64-linux-gnu/dri
+  LIBVA_DRIVERS_PATH: /usr/lib/x86_64-linux-gnu/dri
   ORCHESTRATOR_URL: http://clusterplex-orchestrator:3500
   LISTENING_PORT: "3501"
   STAT_CPU_INTERVAL: "10000"
