@@ -1,16 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base",
+    "config:recommended",
     ":dependencyDashboard",
     ":semanticCommits"
   ],
-  "helm": {
-    "enabled": true
-  },
-  "docker": {
-    "enabled": true
-  },
   "kubernetes": {
     "enabled": true
   },
@@ -104,10 +98,5 @@
     "assignees": [
       "@cmpetersen5551"
     ]
-  },
-  "postUpdateOptions": [
-    "gomodTidy",
-    "yarnDedupeModules",
-    "npmDedupe"
-  ]
+  }
 }
