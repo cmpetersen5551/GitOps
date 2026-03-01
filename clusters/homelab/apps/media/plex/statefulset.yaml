@@ -22,7 +22,10 @@ spec:
         fsGroup: 0
         runAsNonRoot: false
         runAsUser: 0
-        supplementalGroups: [992]  # render group GID on w3 (PVE host) — verify in pre-flight
+        supplementalGroups: [992]  # Intel QSV render group GID on w3 (Proxmox VE host)
+        # linuxserver/plex entrypoint auto-fixes /dev/dri permissions for abc user in Docker,
+        # but in Kubernetes with hostPath mount, explicit supplementalGroups is required.
+        # Verify this GID matches your host: stat /dev/dri/renderD128 | grep Gid (cluster-specific)
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

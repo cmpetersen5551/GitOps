@@ -1,11 +1,10 @@
 ---
 # Longhorn RWX PVC for streaming media library (symlinks via Decypharr)
 # Used by: Decypharr (creates symlinks), Sonarr/Radarr (organize), 
-#          Plex (reads + serves), ClusterPlex (transcodes)
+#          Plex (reads + serves streaming content via Intel QSV GPU transcoding)
 # Architecture: Decypharr creates symlinks pointing to /mnt/dfs (RealDebrid cache)
 #              Sonarr/Radarr organize those symlinks into proper folder structure
-#              Plex aggregates this library with /mnt/media (permanent library)
-#              ClusterPlex workers read streaming content for GPU transcoding
+#              Plex aggregates this library with /mnt/media (permanent library) and transcodes
 # Note: Using Longhorn RWX for HA - share-manager pods provide NFSv4 access
 apiVersion: v1
 kind: PersistentVolumeClaim

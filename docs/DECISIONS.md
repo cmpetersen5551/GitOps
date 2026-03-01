@@ -172,48 +172,56 @@ Correct values are `http` and `https` matching Traefik's internal entrypoint nam
 
 ---
 
-## ClusterPlex (Distributed Plex Transcoding)
+## Plex Media Server (Single-Pod GPU Acceleration)
 
-**Chosen**: ClusterPlex with NFS export of `/mnt/dfs` from w1/w2 host (2026-02-28)
+**Chosen**: Standard linuxserver/plex on w3 GPU node with Longhorn RWX config (2026-02-28)
 
 **Architecture**:
-- **PMS (Plex Media Server)**: Deployment on w1 (storage affinity, prefer primary), single replica
-  - Mounts: `/mnt/media` (Unraid NFS), `/mnt/streaming-media` (Longhorn RWX), `/mnt/dfs` (NFS from w1 host), `/transcode` (Longhorn RWX), `/config` (Longhorn RWO)
-  - Listens on port 32400 (PMS) + 32499 (Local Relay for workers)
-  - Manual post-deploy: Sign in to Plex UI, configure transcoder path = `/transcode`
+- **Plex Pod**: StatefulSet on w3 (GPU node affinity required), 1 replica
+  - Image: `lscr.io/linuxserver/plex:latest` — standard, actively maintained
+  - Mounts:
+    - `/config` — Longhorn RWX PVC → wrapped via static NFS PV (share-manager export) for GPU node access
+    - `/mnt/media` — Unraid NFS (permanent media library)
+    - `/mnt/streaming-media` — Longhorn RWX → wrapped via static NFS PV (share-manager export)
+    - `/mnt/dfs` — NFS server pod re-export of host `/mnt/dfs` FUSE
+    - `/dev/dri` — hostPath to Intel QSV GPU device
+  - **No transcode volume** — Plex writes transcode buffers to container overlay FS (ephemeral, correct pattern)
+  - Hardware acceleration: Intel QSV via `/dev/dri`, configured in Preferences.xml post-deploy
+  - Security context: `runAsUser: 0`, `supplementalGroups: [992]` for render group GPU access
 
-- **Orchestrator**: Deployment on w1 (storage affinity, prefer primary), single replica, stateless
-  - Receives transcode requests from PMS over websocket
-  - Distributes to available workers via load balancing (LOAD_TASKS strategy)
-  - Port 3500 (internal ClusterIP only)
+- **Config Holder Deployment**: Dummy pod on w1/w2 (storage node affinity)
+  - Maintains a CSI mount to `pvc-plex-config` (dynamic Longhorn RWX PVC)
+  - Purpose: Keeps Longhorn share-manager alive; Plex on w3 accesses config via NFS, not CSI
+  - Without holder: share-manager shuts down → NFS export unavailable → Plex pod loses `/config`
 
-- **Workers**: StatefulSet on w3 (GPU node affinity required), 2+ replicas
-  - Each worker talks to orchestrator at `http://clusterplex-orchestrator:3500`
-  - Mounts: same as PMS `/mnt/media`, `/mnt/streaming-media`, `/mnt/dfs` (NFS from w1), `/transcode`
-  - Per-worker `/codecs` volume (RWO) for codec caching via volumeClaimTemplate
-  - Port 3501 (health/status)
-  - Pod anti-affinity: avoid other workers (spread across w3 topology), soft preference away from PMS
-  - **GPU acceleration enabled** via gpu=true node label
+- **NFS Server Pod**: `erichough/nfs-server` Deployment on w1/w2 (storage affinity + prefer primary)
+  - Mounts host's `/mnt/dfs` (FUSE) with `mountPropagation: HostToContainer`
+  - Re-exports as read-only NFS to allow GPU nodes to access FUSE content
+  - Service ClusterIP stable across pod restarts; HA failover handled by descheduler
 
-- **NFS Server Pod**: `erichough/nfs-server` Deployment, scheduled on w1/w2 (storage affinity + prefer primary)
-  - Mounts host's `/mnt/dfs` (FUSE) via hostPath with `mountPropagation: HostToContainer` — this was the root cause of all previous failures (missing propagation = empty dir = no valid exports)
-  - Exports `/export/dfs` read-only over NFS to cluster
-  - Service ClusterIP pinned at `10.43.160.244` — stable across pod restarts, kube-proxy routes to wherever pod runs
-  - NFS PV points to ClusterIP `10.43.160.244` (not a host IP) — provides automatic HA: pod fails over to w2 → ClusterIP routes there
+**Why This Works for LXC w3**:
+- w3 is Proxmox VE LXC, cannot use Longhorn iSCSI CSI driver (block device cgroups forbidden)
+- Config PVC is Longhorn RWX (replicated on w1/w2) → share-manager exports over NFSv4
+- Static NFS PV wraps the share-manager export → accessible from w3 without CSI
+- Same pattern used for streaming-media and DFS access, proven reliable
 
-**Streaming Transcoding HA**:
-- Normal (w1 alive): decypharr-streaming on w1 → FUSE at `/mnt/dfs` on w1 host → NFS server pod on w1 sees it via HostToContainer propagation → exports it → Workers on w3 mount via ClusterIP NFS PVC
-- w1 fails: descheduler evicts → decypharr-streaming + NFS server pod reschedule to w2 → decypharr creates `/mnt/dfs` FUSE on w2 host → NFS server pod picks it up via HostToContainer → same ClusterIP routes to w2 pod → Workers resume automatically (~60s)
-- w1 recovers: descheduler evicts pods from w2 after ~5min → PMS + decypharr + NFS server failback to w1 automatically
+**GPU Acceleration Details**:
+- linuxserver/plex entrypoint automatically fixes `/dev/dri` permissions for the `abc` internal user (via Docker's `--device` flag)
+- In Kubernetes with hostPath mount, explicit `supplementalGroups: [992]` is required (cluster-specific GID for render group)
+- Verify GID before deploy: `stat /dev/dri/renderD128 | grep Gid` on w3 host
+
+**Single-Pod HA Trade-off**:
+- w3 pod failure → Plex unavailable until w3 recovers (minutes to hours)
+- Config volume safe (Longhorn RWX on w1/w2) and backed up nightly to Unraid
+- Acceptable for homelab; GPU transcoding only available when w3 is up anyway
+- ClusterPlex complexity (orchestrator + stateless workers on w3) was unnecessary — standard Plex handles GPU fine
 
 **Rejected Alternatives**:
-- Host-level `nfs-kernel-server` — requires manual SSH runbook on every failover, not GitOps-managed
-- SMB/Samba sidecar — previously rejected; do not re-add
-- Direct hostPath from w3 — `/mnt/dfs` FUSE only exists on whichever node runs decypharr-streaming
+- ClusterPlex (orchestrator + workers) — added complexity without GPU benefit (GPU device not shareable across pods)
+- Plex on w1/w2 (storage nodes) — no GPU, software transcode only, same single-pod failure scenario
+- Multiple GPU nodes with pod affinity spreading — works, but single node (w3) sufficient for homelab
 
-**Important Notes**:
-- Local Relay (NGINX proxy in PMS) is enabled by default (`LOCAL_RELAY_ENABLED=1`) — workers talk to relay at port 32499, not directly to PMS
-- Transcode temp MUST be RWX shared volume (both PMS and all workers write here)
-- `/config` (PMS app data) does NOT need to be shared with workers — Longhorn RWO is fine
-- `/codecs` auto-created per worker via volumeClaimTemplate (Longhorn RWO, codec cache is per-architecture)
-- NFS mount options (`noac`, `soft`, `timeo=10`, `retrans=2`) prevent staleness and fail fast if export disappears
+**Configuration Notes**:
+- NFS mount options (`soft`, `timeo=10`, `retrans=2`) prevent stale handle errors
+- SQLite over NFS acceptable for single-writer homelab; Longhorn nightly backup (~7-day retention) is safety net
+- Plex will auto-initialize `/config` on first boot, then sign in via UI to claim server and add libraries

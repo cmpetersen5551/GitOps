@@ -45,6 +45,10 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 30
+      # NFS server re-exports host /mnt/dfs (FUSE from Decypharr) so that GPU nodes (w3) can
+      # access the streaming media RealDebrid cache. HostToContainer mount propagation is
+      # critical: FUSE mounts only visible on host node; mount propagation makes them visible
+      # inside this container so it can export them via NFS to cluster.
       initContainers:
         - name: load-nfsd
           image: busybox:latest

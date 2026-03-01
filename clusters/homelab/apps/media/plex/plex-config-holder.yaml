@@ -17,9 +17,13 @@ spec:
         app.kubernetes.io/name: plex-config-holder
         app.kubernetes.io/part-of: plex
     spec:
-      # Runs on w1/w2 (Longhorn storage nodes) via CSI to keep the share-manager
-      # for pvc-plex-config alive. Without this, Longhorn shuts down the share-manager
-      # when nothing is mounting pvc-plex-config via CSI, and plex-0 on w3 loses NFS access.
+      # Dummy pod that holds a CSI mount to pvc-plex-config (Longhorn RWX) to keep the
+      # share-manager alive. Longhorn only starts share-manager if at least one CSI consumer
+      # is mounted. Plex pod on w3 uses *static NFS PV* (no CSI) because w3 is LXC and can't
+      # use Longhorn iSCSI. This holder prevents Longhorn from shutting down share-manager
+      # when it sees no CSI mounts, which would break Plex's NFS access to /config.
+      # Without holder: Longhorn detects "no CSI consumers" → shuts down share-manager →
+      # Plex's static NFS PV mount fails → Plex pod can't access /config → crash loop.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

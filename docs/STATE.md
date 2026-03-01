@@ -70,11 +70,12 @@
 | http://profilarr.homelab | profilarr | — |
 | http://decypharr-streaming.homelab | decypharr-streaming | 8282 |
 | http://decypharr-download.homelab | decypharr-download | 8282 |
+| http://plex.homelab | plex | 32400 |
+| http://longhorn.homelab | longhorn-ui | — |
 
 ---
 
 ## Pending (Not Yet Deployed)
 
 - Phase 6: Quality profiles via Profilarr/TRaSH Guides sync
-- Phase 7: Plex + ClusterPlex (Plex on StatefulSet, Intel GPU plugin for w3, workers)
 - Phase 8: Pulsarr (Plex watchlist → Sonarr/Radarr auto-request)
