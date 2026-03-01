@@ -44,7 +44,7 @@
 | dispatcharr-0 | k3s-w1 | ghcr.io/dispatcharr/dispatcharr:v0.20.1 | config-dispatcharr-0 (2Gi RWO) |
 | eplustv-0 | k3s-w1 | tonywagner/eplustv:v4.15.0 | config-eplustv-0 (1Gi RWO) |
 | pluto-for-channels | k3s-w1 | jonmaddox/pluto-for-channels:2.0.2 | — (stateless) |
-| teamarr-0 | k3s-w1 | ghcr.io/pharaoh-labs/teamarr:v2.2.2 | config-teamarr-0 (2Gi RWO) |
+| teamarr-0 | k3s-w1 | ghcr.io/pharaoh-labs/teamarr:2.2.2 | config-teamarr-0 (5Gi RWO) |
 
 ---
 
@@ -68,7 +68,7 @@
 | config-channels-dvr-0 | 5Gi | longhorn-simple (RWO) | channels-dvr (config + recordings DB) |
 | config-dispatcharr-0 | 2Gi | longhorn-simple (RWO) | dispatcharr |
 | config-eplustv-0 | 1Gi | longhorn-simple (RWO) | eplustv |
-| config-teamarr-0 | 2Gi | longhorn-simple (RWO) | teamarr |
+| config-teamarr-0 | 5Gi | longhorn-simple (RWO) | teamarr |
 | pvc-media-nfs (live) | 1Ti | nfs-unraid (RWX) | channels-dvr (Unraid media — recordings) |
 
 ---
