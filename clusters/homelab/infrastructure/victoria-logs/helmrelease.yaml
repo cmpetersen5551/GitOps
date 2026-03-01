@@ -26,8 +26,8 @@ spec:
         enabled: true
       
       extraArgs:
-        - "-retentionPeriod=4d"
-        - "-storageDataPath=/victorialogs-data"
+        retentionPeriod: 4d
+        storageDataPath: /victorialogs-data
       
       resources:
         requests:
