@@ -46,7 +46,7 @@ SQLite-over-NFS risk: Acceptable for single-writer, single-pod homelab use. NFSv
 |---|---|---|
 | NFS server pod + service | `plex/` | Still needed: re-exports host `/mnt/dfs` FUSE for GPU nodes |
 | `pv-nfs-dfs` / `pvc-nfs-dfs` | `plex/` | Still needed: DFS access for Plex |
-| `pv-nfs-media` / `pvc-nfs-media` | `plex/` | Unraid media library (RWX) — generic, any GPU node can claim it |
+| `pvc-media-nfs` | `media/nfs/` | Shared Unraid media library (RWX) — uses infrastructure `pv-nfs-media`, accessible to any pod |
 | `pv-nfs-streaming-media` / `pvc-nfs-streaming-media` | `plex/` | Streaming media (RWX via Longhorn share-manager) — generic for GPU failover |
 | Ingress (plex.homelab → plex on port 32400) | `plex/` | Identical, just updated service name |
 
@@ -460,7 +460,7 @@ spec:
             claimName: pvc-nfs-plex-config    # Static NFS PV → Longhorn share-manager (NFSv4)
         - name: media-nfs
           persistentVolumeClaim:
-            claimName: pvc-nfs-media      # Static NFS PV → Unraid /mnt/user/media
+            claimName: pvc-media-nfs      # Shared Unraid NFS (from media/nfs, uses infrastructure pv-nfs-media)
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-nfs-streaming-media  # Static NFS PV → Longhorn share-manager
@@ -557,10 +557,9 @@ Move from `clusterplex/` to `plex/`:
 - `service-nfs-server.yaml` → rename to `service-plex-nfs-server.yaml`, update selector label to `app.kubernetes.io/name: plex-nfs-server`, service name becomes `plex-nfs-server`
 - `pv-nfs-dfs.yaml`, update label to `app.kubernetes.io/part-of: plex`
 - `pvc-nfs-dfs.yaml`, claimName `pvc-nfs-dfs` (matches updated PV)
-- `pv-nfs-media.yaml` (renamed from `pv-nfs-media-w3.yaml` — now generic for any GPU node)
-- `pvc-nfs-media.yaml` (renamed from `pvc-nfs-media-w3.yaml` — now generic for any GPU node)
 - `pv-nfs-streaming-media.yaml` (renamed from `pv-streaming-media-w3.yaml` — now generic for any GPU node)
 - `pvc-nfs-streaming-media.yaml` (renamed from `pvc-streaming-media-w3.yaml` — now generic for any GPU node)
+- **Media**: Plex uses `pvc-media-nfs` from `media/nfs/` folder (infrastructure-managed `pv-nfs-media`)
 
 **Important**: When you rename `service-nfs-server` to `service-plex-nfs-server`, the Service's ClusterIP will change. After the service is deployed, find its new ClusterIP and update `pv-nfs-dfs.yaml`'s NFS server field:
 ```bash
@@ -580,9 +579,7 @@ resources:
   - pv-nfs-plex-config.yaml
   - pvc-nfs-plex-config.yaml
   - plex-config-holder.yaml   # Keeps the Longhorn share-manager alive (CSI consumer on w1/w2)
-  # Storage - media (Unraid NFS, static NFS wrappers for any node needing it)
-  - pv-nfs-media.yaml
-  - pvc-nfs-media.yaml
+  # Storage - media (uses shared infrastructure pvc-media-nfs from media/nfs/ folder)
   # Storage - streaming media (Longhorn RWX share-manager, static NFS wrappers for GPU nodes)
   - pv-nfs-streaming-media.yaml
   - pvc-nfs-streaming-media.yaml

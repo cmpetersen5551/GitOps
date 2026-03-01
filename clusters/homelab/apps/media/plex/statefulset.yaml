@@ -106,7 +106,7 @@ spec:
             claimName: pvc-nfs-plex-config    # Static NFS PV → Longhorn share-manager (NFSv4)
         - name: media-nfs
           persistentVolumeClaim:
-            claimName: pvc-nfs-media      # Static NFS PV → Unraid /mnt/user/media
+            claimName: pvc-media-nfs      # Shared Unraid NFS (from media/nfs, uses infrastructure pv-nfs-media)
         - name: streaming-media
           persistentVolumeClaim:
             claimName: pvc-nfs-streaming-media  # Static NFS PV → Longhorn share-manager
