@@ -39,18 +39,22 @@ spec:
   
   postRenderers:
     - kustomize:
-        patchesStrategicMerge:
-          - apiVersion: apps/v1
-            kind: StatefulSet
-            metadata:
+        patchesJson6902:
+          - target:
+              group: apps
+              version: v1
+              kind: StatefulSet
               name: victoria-logs-victoria-logs-single-server
-            spec:
-              template:
-                spec:
-                  nodeSelector:
-                    node.longhorn.io/create-default-disk: "true"
-                  tolerations:
-                    - key: node.longhorn.io/storage
-                      operator: Equal
-                      value: enabled
-                      effect: NoSchedule
+              namespace: victoria-logs
+            patch:
+              - op: add
+                path: /spec/template/spec/nodeSelector
+                value:
+                  node.longhorn.io/create-default-disk: "true"
+              - op: add
+                path: /spec/template/spec/tolerations
+                value:
+                  - key: node.longhorn.io/storage
+                    operator: Equal
+                    value: enabled
+                    effect: NoSchedule
