@@ -6,7 +6,7 @@ metadata:
   labels:
     app: channels-dvr
   annotations:
-    metallb.universe.tf/loadBalancerIPs: 192.168.100.101
+    metallb.universe.tf/loadBalancerIPs: 192.168.100.110
     metallb.universe.tf/address-pool: default
 spec:
   type: LoadBalancer
