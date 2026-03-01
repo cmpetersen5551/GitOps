@@ -71,6 +71,28 @@
 
 ---
 
+## NFS Configuration (Unraid)
+
+**Server**: 192.168.1.29  
+**Exports** (add to Unraid `/etc/exports` or via GUI):
+```
+/mnt/user/media       *(rw,sync,no_subtree_check,no_root_squash)
+/mnt/user/transcode   *(rw,sync,no_subtree_check,no_root_squash)
+```
+
+**PVs in cluster**:
+- `pv-nfs-media` → claimed by `pvc-media-nfs` (media namespace) → sonarr, radarr, plex
+- `pv-nfs-media-live` → claimed by `pvc-media-nfs` (live namespace) → channels-dvr recordings
+
+**Mount examples** (Proxmox / other hosts):
+```bash
+mkdir -p /mnt/unraid/media /mnt/unraid/transcode
+mount -t nfs 192.168.1.29:/mnt/user/media /mnt/unraid/media
+mount -t nfs 192.168.1.29:/mnt/user/transcode /mnt/unraid/transcode
+```
+
+---
+
 ## Ingress Routes
 
 | URL | App | Port |
