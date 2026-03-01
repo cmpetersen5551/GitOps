@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: channels-dvr
+  namespace: live
+  labels:
+    app: channels-dvr
+spec:
+  serviceName: channels-dvr-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: channels-dvr
+  template:
+    metadata:
+      labels:
+        app: channels-dvr
+        streaming-stack: "true"
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: config-channels-dvr
+        - name: recordings
+          persistentVolumeClaim:
+            claimName: pvc-media-nfs  # Shared media library for recordings
+      containers:
+        - name: channels-dvr
+          image: fancybits/channels-dvr:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8089
+              name: http
+          env:
+            - name: TZ
+              value: "America/Chicago"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8089
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8089
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /opt/channels
+            - name: recordings
+              mountPath: /mnt/recordings
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.longhorn.io/storage
+                    operator: In
+                    values:
+                      - enabled
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.longhorn.io/primary
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: node.longhorn.io/storage
+          operator: Equal
+          value: enabled
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30

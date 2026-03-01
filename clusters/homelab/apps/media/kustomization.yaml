@@ -12,17 +12,12 @@ resources:
   - ./longhorn
   - ./plex
   - ./pulsarr
-  - ./channels-dvr
-  - ./pluto-for-channels
-  - ./eplustv
-  - ./dispatcharr
-  - ./teamarr
 
 patches:
   - path: patches/ha-affinity.yaml
     target:
       kind: StatefulSet
-      name: "(sonarr|radarr|prowlarr|profilarr|decypharr|pulsarr|channels-dvr)"
+      name: "(sonarr|radarr|prowlarr|profilarr|decypharr|pulsarr)"
   - path: patches/statefulset-strategy.yaml
     target:
       kind: StatefulSet
